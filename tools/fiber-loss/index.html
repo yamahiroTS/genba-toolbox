@@ -276,12 +276,6 @@ const COUNTS=[1,2,4,6,8,12,16,24,32,40,48];
 const WL={SM:[1310,1550],GI:[850,1300]};
 const KEY="fiberLoss.v1";
 
-function sample(){
-  const rx=["6.83","6.84","6.82","6.68"], col=["青","黄","緑","赤"];
-  return {from:"A棟",to:"B棟",date:"",tester:"",type:"SM",wl:1310,dist:"1249",unit:"m",n1:"32",n2:"2",conn:"maker",
-    preset:"sheet",K:"",S:"",C:"",margin:"0",fixedOn:false,fixed:"",mode:"level",ref:{m:"3.85",neg:true},count:4,
-    cores:col.map((c,i)=>({color:c,rx:{m:rx[i],neg:true},loss:""})),isSample:true};
-}
 function blank(){
   return {from:"",to:"",date:today(),tester:"",type:"SM",wl:1310,dist:"",unit:"m",n1:"2",n2:"2",conn:"maker",
     preset:"sheet",K:"",S:"",C:"",margin:"0",fixedOn:false,fixed:"",mode:"level",ref:{m:"",neg:true},count:4,
@@ -291,7 +285,7 @@ function today(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth
 
 let S;
 try{S=JSON.parse(localStorage.getItem(KEY+".draft"))}catch(e){S=null}
-if(!S||!S.cores)S=sample();
+if(!S||!S.cores)S=blank(); // 初回は空の入力画面（融着数 n1=2・コネクタ数 n2=2）
 S.mode="level"; // 入力方法はレベル入力のみ（損失値での入力は廃止）
 
 function num(v){if(v===null||v===undefined)return NaN;const t=String(v).replace(/[，,]/g,".").replace(/[０-９．－]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace("ー","-").trim();if(t==="")return NaN;return Number(t)}
