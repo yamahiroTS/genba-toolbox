@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="app-root" content="../../">
+<meta name="theme-color" content="#1f2a25">
+<link rel="manifest" href="../../manifest.webmanifest">
+<link rel="icon" href="../../icons/icon-192.png">
+<title>光損失判定</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap">
+<style>
+/* Layout: one narrow field column. Sticky verdict bar on top, then 条件 → 許容値 → 芯線ごとの測定 → 記録. Accent follows the jacket colour of the cable type (SM yellow / GI orange). */
+:root{
+  --bg:#eef1f2; --panel:#ffffff; --ink:#15232b; --muted:#5b6b73; --line:#d5dde0; --field:#f6f8f9;
+  --sm:#e8b500; --gi:#e8711c; --accent:var(--sm); --on-accent:#15232b;
+  --ok:#17804a; --ok-bg:#e1f3e8; --ng:#c62a2a; --ng-bg:#fbe4e2; --warn:#9a6400; --warn-bg:#fdf1d6;
+  --f-body:"IBM Plex Sans JP","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f171b; --panel:#17232a; --ink:#e3eaed; --muted:#93a4ac; --line:#2a3a42; --field:#1e2c33;
+  --sm:#f0c419; --gi:#f08a3c; --on-accent:#111a1f;
+  --ok:#4cc483; --ok-bg:#163527; --ng:#ff7a70; --ng-bg:#3f1d1c; --warn:#f0b54a; --warn-bg:#3a2d12; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f171b; --panel:#17232a; --ink:#e3eaed; --muted:#93a4ac; --line:#2a3a42; --field:#1e2c33;
+  --sm:#f0c419; --gi:#f08a3c; --on-accent:#111a1f;
+  --ok:#4cc483; --ok-bg:#163527; --ng:#ff7a70; --ng-bg:#3f1d1c; --warn:#f0b54a; --warn-bg:#3a2d12; color-scheme:dark}
+:root.gi{--accent:var(--gi)}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--panel)}
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+h1{font-size:20px;margin:0;font-weight:700;letter-spacing:.02em}
+h2{font-size:13px;margin:0;font-weight:700;letter-spacing:.08em;color:var(--muted)}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--panel);border-bottom:1px solid var(--line);
+  margin:0 calc(-1*max(16px,env(safe-area-inset-right,0px))) 0 calc(-1*max(16px,env(safe-area-inset-left,0px)));
+  padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px))}
+.bar-in{max-width:720px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.tag{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:13px;padding:2px 10px;border-radius:999px;background:var(--accent);color:var(--on-accent)}
+.bar .allow{margin-left:auto;text-align:right;line-height:1.2}
+.bar .allow small{display:block;font-size:11px;color:var(--muted)}
+.bar .allow b{font-size:20px}
+.verdict{font-weight:700;font-size:14px;padding:6px 12px;border-radius:8px;min-width:84px;text-align:center}
+.v-ok{background:var(--ok-bg);color:var(--ok)} .v-ng{background:var(--ng-bg);color:var(--ng)} .v-none{background:var(--field);color:var(--muted)} .v-warn{background:var(--warn-bg);color:var(--warn)}
+section.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.grid .full{grid-column:1/-1}
+@media (max-width:420px){.grid.g3{grid-template-columns:1fr 1fr}}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:0}
+label.f .hint{font-size:11px}
+input,select{font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:8px;padding:10px 10px;width:100%;min-width:0;min-height:44px}
+input.num{font-size:17px}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.unit{display:flex;gap:0;min-width:0}
+.unit input{border-radius:8px 0 0 8px}
+.unit button{border-radius:0 8px 8px 0;border-left:0;min-width:52px}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--field)}
+.seg button{flex:1;border:0;border-radius:0;background:transparent;min-height:44px;font-weight:700}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+button{font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:8px;padding:8px 14px;min-height:44px;cursor:pointer}
+button.primary{background:var(--ink);color:var(--panel);border-color:var(--ink);font-weight:700}
+button.ghost{background:transparent}
+.formula{font-family:var(--f-num);font-size:13px;color:var(--muted);overflow-x:auto;white-space:nowrap}
+.result{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.result .big{font-size:40px;font-weight:600;line-height:1}
+.result .big small{font-size:16px;color:var(--muted);margin-left:4px}
+.stack{display:flex;height:14px;border-radius:4px;overflow:hidden;background:var(--field)}
+.stack span{display:block;height:100%}
+.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px 12px;font-size:12px;color:var(--muted)}
+.legend div{display:flex;gap:6px;align-items:center;min-width:0}
+.legend i{width:10px;height:10px;border-radius:2px;flex:none}
+.legend b{color:var(--ink);margin-left:auto;font-weight:500}
+.c1{background:var(--accent)} .c2{background:var(--ink);opacity:.75} .c3{background:var(--muted);opacity:.6} .c4{background:var(--line)}
+details summary{cursor:pointer;font-size:13px;color:var(--muted);min-height:32px;display:flex;align-items:center}
+.check{display:flex;align-items:center;gap:8px;font-size:14px}
+.check input{width:22px;height:22px;min-height:0}
+.lvl{display:flex;min-width:0}
+.lvl button{border-radius:8px 0 0 8px;border-right:0;min-width:44px;padding:0;font-family:var(--f-num);font-size:18px;font-weight:600}
+.lvl input{border-radius:0 8px 8px 0}
+.lvl .u{display:none}
+.tbl-wrap{overflow-x:auto;margin:0 -4px}
+table{width:100%;border-collapse:collapse;min-width:440px}
+th{font-size:11px;color:var(--muted);font-weight:500;text-align:left;padding:6px 4px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:6px 4px;border-bottom:1px solid var(--line);vertical-align:middle}
+td.no{font-family:var(--f-num);font-weight:600;width:36px;text-align:center}
+td.col select{min-width:64px;padding:8px 4px}
+td.loss,td.mg{font-family:var(--f-num);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+td.mg{color:var(--muted);font-size:13px}
+.chip{display:inline-block;font-size:12px;font-weight:700;padding:3px 8px;border-radius:6px;white-space:nowrap}
+.counts{display:flex;gap:8px;flex-wrap:wrap}
+.counts .chip{font-size:13px;padding:4px 10px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.toast{font-size:13px;color:var(--ok);min-height:20px}
+.note{font-size:13px;color:var(--muted)}
+.notes{display:flex;flex-direction:column;gap:10px;font-size:14px}
+.notes div{border-left:3px solid var(--accent);padding-left:10px}
+.notes b{display:block;font-size:14px}
+.rec{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding:6px 0;flex-wrap:wrap}
+.rec .t{flex:1;min-width:0;font-size:14px;overflow-wrap:anywhere}
+.rec .t small{display:block;color:var(--muted);font-size:12px}
+textarea#copyfb{width:100%;min-height:120px;font-family:var(--f-num);font-size:12px;background:var(--field);color:var(--ink);border:1px solid var(--line);border-radius:8px}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
+@media (prefers-reduced-motion:no-preference){.verdict,.chip{transition:background .15s,color .15s}}
+</style>
+
+<style>
+*{box-sizing:border-box}
+html,body{margin:0}
+[hidden]{display:none!important}
+img{max-width:100%}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.legendNote{font-size:11.5px;line-height:1.6;color:var(--muted);border-top:1px dashed var(--line);padding-top:10px}
+.legendNote p{margin:0}
+.legendNote dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:6px 0}
+.legendNote dt{font-family:var(--f-num);font-weight:600;color:var(--ink)}
+.legendNote dd{margin:0;min-width:0}
+.pane{display:flex;flex-direction:column;gap:16px;min-width:0}
+@media (min-width:900px){
+  .wrap{max-width:1180px;display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:20px;align-items:start}
+  .bar-in{max-width:1180px}
+}
+.back{color:var(--muted);text-decoration:none;font-size:14px;display:inline-flex;align-items:center;min-height:36px;padding-right:4px}
+.back:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="bar-in">
+    <a class="back" href="../../index.html" aria-label="メニューに戻る">‹</a>
+    <h1>光損失判定</h1>
+    <span class="tag" id="barTag">SM 1310nm</span>
+    <div class="allow"><small>許容値</small><b class="num" id="barAllow">—</b> <span class="num" style="font-size:12px;color:var(--muted)">dB</span></div>
+    <div class="verdict v-none" id="barVerdict">未入力</div>
+  </div>
+</div>
+
+<div class="wrap" style="margin-top:16px">
+<div class="pane">
+
+  <section class="panel" aria-labelledby="h-sec">
+    <div class="head"><h2 id="h-sec">測定区間</h2><span class="note" id="sampleNote"></span></div>
+    <div class="grid">
+      <label class="f">区間（始点）<input id="from" placeholder="A棟"></label>
+      <label class="f">区間（終点）<input id="to" placeholder="B棟"></label>
+      <label class="f">試験日<input id="date" type="date"></label>
+      <label class="f">試験者<input id="tester"></label>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-cond">
+    <h2 id="h-cond">ケーブル条件</h2>
+    <div class="grid">
+      <div class="f full" style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)">ケーブル種別
+        <div class="seg" role="group" aria-label="ケーブル種別">
+          <button type="button" id="tGI" aria-pressed="false">GI（マルチモード）</button>
+          <button type="button" id="tSM" aria-pressed="true">SM（シングルモード）</button>
+        </div>
+      </div>
+      <label class="f">測定波長<select id="wl"></select></label>
+      <label class="f">配線距離
+        <span class="unit"><input id="dist" class="num" inputmode="decimal" autocomplete="off"><button type="button" id="unitBtn">m</button></span>
+      </label>
+      <label class="f">融着数 n1<input id="n1" class="num" inputmode="numeric" autocomplete="off"><span class="hint">1芯の経路上の融着か所</span></label>
+      <label class="f">コネクタ数 n2<input id="n2" class="num" inputmode="numeric" autocomplete="off"><span class="hint">区間内の接続か所（両端盤なら2）</span></label>
+      <div class="f full" style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)">コネクタ
+        <div class="seg" role="group" aria-label="コネクタ">
+          <button type="button" id="cMaker" aria-pressed="true">メーカ作成</button>
+          <button type="button" id="cField" aria-pressed="false">現場組立</button>
+        </div>
+      </div>
+    </div>
+
+    <details id="coefBox">
+      <summary>損失係数・基準値の設定</summary>
+      <div class="grid" style="margin-top:8px">
+        <label class="f full">係数の基準
+          <select id="preset">
+            <option value="sheet">成績表準拠（K/S/C は納入仕様書の値）</option>
+            <option value="tia">TIA-568 目安</option>
+            <option value="manual">手入力</option>
+          </select>
+        </label>
+      </div>
+      <div class="grid g3" style="margin-top:12px">
+        <label class="f">K dB/km<input id="K" class="num" inputmode="decimal"></label>
+        <label class="f">S dB/か所<input id="S" class="num" inputmode="decimal"></label>
+        <label class="f">C dB/か所<input id="C" class="num" inputmode="decimal"></label>
+      </div>
+      <p class="note" id="presetNote" style="margin:8px 0 0"></p>
+      <div class="grid" style="margin-top:12px">
+        <label class="f">設計余裕（マージン）<input id="margin" class="num" inputmode="decimal"><span class="hint">dB。不要なら 0</span></label>
+        <div class="f" style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted)">基準値を直接指定
+          <label class="check"><input type="checkbox" id="fixedOn"> 仕様書の値を使う</label>
+          <input id="fixed" class="num" inputmode="decimal" placeholder="dB" aria-label="基準値 dB">
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section class="panel" aria-labelledby="h-allow">
+    <div class="head"><h2 id="h-allow">光損失許容値</h2><span class="note" id="allowSrc"></span></div>
+    <div class="result"><div class="big num" id="allowBig">—<small>dB</small></div></div>
+    <div class="stack" id="stack" aria-hidden="true"></div>
+    <div class="legend" id="legend"></div>
+    <div class="formula" id="formula"></div>
+    <div class="legendNote">
+      <p>計算式：許容損失 [dB] ＝ L × K ＋ n1 × S ＋ n2 × C（＋ 余裕）</p>
+      <dl>
+        <dt>L</dt><dd>配線距離 [km]</dd>
+        <dt>K</dt><dd>ケーブルの損失係数 [dB/km]：光ファイバ1kmあたりに減衰する量</dd>
+        <dt>S</dt><dd>融着接続の損失 [dB/か所]：融着1か所あたりの減衰量</dd>
+        <dt>C</dt><dd>コネクタ接続の損失 [dB/か所]：コネクタ1か所あたりの減衰量</dd>
+        <dt>n1</dt><dd>融着数：1芯の経路上にある融着か所の数</dd>
+        <dt>n2</dt><dd>コネクタ数：区間内のコネクタ接続か所の数</dd>
+        <dt>余裕</dt><dd>設計上のマージン [dB]（不要なら 0）</dd>
+      </dl>
+      <p>判定：測定した損失 ≦ 許容損失 で OK</p>
+    </div>
+  </section>
+
+</div>
+<div class="pane">
+  <section class="panel" aria-labelledby="h-meas">
+    <div class="head"><h2 id="h-meas">測定結果</h2>
+      <div class="counts" id="counts"></div>
+    </div>
+    <div class="grid">
+      <label class="f" id="refWrap">基準レベル（光源・送り側）dBm
+        <span class="lvl"><button type="button" id="refSign" aria-label="符号を切替">−</button><input id="ref" class="num" inputmode="decimal" autocomplete="off"></span>
+        <span class="hint">リファレンス取得時の値。損失＝基準 − 受光</span>
+      </label>
+      <label class="f">芯数
+        <select id="count"></select>
+      </label>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>芯</th><th>色</th><th id="thIn">受光レベル dBm</th><th style="text-align:right">損失 dB</th><th style="text-align:right">余裕</th><th>判定</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="note" style="margin:0">判定：損失 ≦ 許容値で OK。損失がマイナスになった芯は基準の取り直しか接続面の清掃が必要です。</p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-rec">
+    <h2 id="h-rec">記録</h2>
+    <div class="row">
+      <button type="button" class="primary" id="copyBtn">成績表用にコピー</button>
+      <button type="button" id="saveBtn">この測定を保存</button>
+      <button type="button" class="ghost" id="newBtn">新しい測定</button>
+    </div>
+    <div class="confirm" id="newConfirm" hidden>入力中の内容を消します。<button type="button" id="newYes">消して新規</button><button type="button" class="ghost" id="newNo">やめる</button></div>
+    <div class="toast" id="toast" role="status"></div>
+    <textarea id="copyfb" hidden readonly aria-label="コピー用テキスト"></textarea>
+    <div id="recList"></div>
+    <p class="note" style="margin:0">保存はこの端末のブラウザ内だけです。コピーはタブ区切りなので、Excel の成績表にそのまま貼り付けられます。</p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-notes">
+    <h2 id="h-notes">元の成績表との違い</h2>
+    <div class="notes">
+      <div><b>損失の計算方向</b>成績表は「損失＝Pout − Pin」で、記入例は Pout（出力）が Pin（入力）より大きい値になっています。光はケーブルを通ると弱くなるので、入射（基準）− 受光 が損失です。アプリは「基準レベル − 受光レベル」で計算します。</div>
+      <div><b>SM の現場組立コネクタ</b>①〜③の許容値欄に「SM／現場組立（1.0dB/か所）」がありません。アプリでは SM でも現場組立を選べます。</div>
+      <div><b>GI の測定波長</b>成績表は 1.31μm だけの係数です。GI を 850nm で測る場合は 1.0dB/km では厳しすぎ、目安は 3.0dB/km 程度です（TIA-568.3-D）。</div>
+      <div><b>融着数 n1</b>記入例は 12芯で n1=32 です。n1 は1芯の経路上の融着か所数（両端ピッグテール融着なら2＋中間接続）で、全芯の合計ではありません。合計で入れると許容値が大きくなり、NG を見逃します。</div>
+      <div><b>許容値の丸め</b>アプリは許容値を小数第3位で切り捨てて判定します（8.0245 → 8.02）。</div>
+    </div>
+  </section>
+</div>
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const COLORS=["","青","黄","緑","赤","紫","白","茶","灰","橙","黒","桃","水"];
+const COUNTS=[1,2,4,6,8,12,16,24,32,40,48];
+const WL={SM:[1310,1550],GI:[850,1300]};
+const KEY="fiberLoss.v1";
+
+function sample(){
+  const rx=["6.83","6.84","6.82","6.68"], col=["青","黄","緑","赤"];
+  return {from:"A棟",to:"B棟",date:"",tester:"",type:"SM",wl:1310,dist:"1249",unit:"m",n1:"32",n2:"2",conn:"maker",
+    preset:"sheet",K:"",S:"",C:"",margin:"0",fixedOn:false,fixed:"",mode:"level",ref:{m:"3.85",neg:true},count:4,
+    cores:col.map((c,i)=>({color:c,rx:{m:rx[i],neg:true},loss:""})),isSample:true};
+}
+function blank(){
+  return {from:"",to:"",date:today(),tester:"",type:"SM",wl:1310,dist:"",unit:"m",n1:"2",n2:"2",conn:"maker",
+    preset:"sheet",K:"",S:"",C:"",margin:"0",fixedOn:false,fixed:"",mode:"level",ref:{m:"",neg:true},count:4,
+    cores:[...Array(4)].map(()=>({color:"",rx:{m:"",neg:true},loss:""})),isSample:false};
+}
+function today(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+
+let S;
+try{S=JSON.parse(localStorage.getItem(KEY+".draft"))}catch(e){S=null}
+if(!S||!S.cores)S=sample();
+S.mode="level"; // 入力方法はレベル入力のみ（損失値での入力は廃止）
+
+function num(v){if(v===null||v===undefined)return NaN;const t=String(v).replace(/[，,]/g,".").replace(/[０-９．－]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace("ー","-").trim();if(t==="")return NaN;return Number(t)}
+function lvl(o){let v=num(o.m);if(isNaN(v))return NaN;v=Math.abs(v);return o.neg?-v:v}
+function f2(v){return isNaN(v)?"—":v.toFixed(2)}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+
+function presetCoef(){
+  const t=S.type,w=S.wl,cf=S.conn==="field";
+  if(S.preset==="sheet"){
+    return {K:t==="SM"?0.5:(w===850?3.0:1.0),S:0.2,C:cf?(t==="SM"?1.0:0.8):0.5,
+      note:(t==="GI"&&w===850?"成績表に 850nm の係数がないため K は TIA 目安 3.0 を使用。":"")+"成績表：K SM0.5／GI1.0、S 0.2、C 0.5（現場組立 SM1.0／GI0.8）。"};
+  }
+  if(S.preset==="tia"){
+    return {K:t==="SM"?0.5:(w===850?3.0:1.5),S:0.3,C:0.75,note:"TIA-568 の目安：マルチモード 3.0（850nm）／1.5（1300nm）、シングルモード 0.5 dB/km、融着 0.3、コネクタ 0.75 dB。"};
+  }
+  return null;
+}
+function applyPreset(){
+  const p=presetCoef();
+  if(p){S.K=String(p.K);S.S=String(p.S);S.C=String(p.C);$("K").value=S.K;$("S").value=S.S;$("C").value=S.C;$("presetNote").textContent=p.note}
+  else $("presetNote").textContent="係数を手入力しています。納入仕様書の値を入れてください。";
+}
+
+function calc(){
+  const Lkm=S.unit==="m"?num(S.dist)/1000:num(S.dist);
+  const K=num(S.K),Sv=num(S.S),C=num(S.C),n1=num(S.n1)||0,n2=num(S.n2)||0,mg=num(S.margin)||0;
+  const parts=[Lkm*K,n1*Sv,n2*C,mg];
+  let total=parts.reduce((a,b)=>a+b,0);
+  let fixed=S.fixedOn?num(S.fixed):NaN;
+  const raw=S.fixedOn?fixed:total;
+  const allow=isNaN(raw)?NaN:Math.floor(raw*100+1e-9)/100;
+  return {Lkm,K,Sv,C,n1,n2,mg,parts,total,allow};
+}
+
+function coreLoss(c){
+  if(S.mode==="loss")return num(c.loss);
+  const r=lvl(S.ref),x=lvl(c.rx);
+  if(isNaN(r)||isNaN(x))return NaN;
+  return Math.round((r-x)*100)/100;
+}
+function judge(loss,allow){
+  if(isNaN(loss)||isNaN(allow))return {k:"none",t:"—"};
+  if(loss<0)return {k:"warn",t:"再測定"};
+  return loss<=allow+1e-9?{k:"ok",t:"OK"}:{k:"ng",t:"NG"};
+}
+
+function update(){
+  document.documentElement.classList.toggle("gi",S.type==="GI");
+  const r=calc();
+  $("barTag").textContent=S.type+" "+S.wl+"nm";
+  $("barAllow").textContent=f2(r.allow);
+  $("allowBig").innerHTML=esc(f2(r.allow))+"<small>dB</small>";
+  $("allowSrc").textContent=S.fixedOn?"仕様書の基準値":(r.mg?"計算値＋余裕":"計算値");
+  const labels=["ケーブル L×K","融着 n1×S","コネクタ n2×C","余裕"];
+  const cls=["c1","c2","c3","c4"];
+  const tot=r.parts.reduce((a,b)=>a+(isNaN(b)?0:b),0);
+  $("stack").innerHTML=r.parts.map((p,i)=>(!isNaN(p)&&p>0&&tot>0)?'<span class="'+cls[i]+'" style="width:'+(p/tot*100).toFixed(2)+'%"></span>':"").join("");
+  $("legend").innerHTML=r.parts.map((p,i)=>(i===3&&!r.mg)?"":'<div><i class="'+cls[i]+'"></i>'+labels[i]+'<b class="num">'+f2(p)+'</b></div>').join("");
+  $("stack").style.opacity=S.fixedOn?.35:1;
+  $("formula").textContent=isNaN(r.Lkm)?"距離を入力してください":
+    "("+r.Lkm.toFixed(3)+"km×"+S.K+") + ("+r.n1+"×"+S.S+") + ("+r.n2+"×"+S.C+")"+(r.mg?" + "+r.mg:"")+" = "+(isNaN(r.total)?"—":r.total.toFixed(4))+" dB"+(S.fixedOn?"（参考）":"");
+  // rows
+  let ok=0,ng=0,wr=0,none=0;
+  S.cores.forEach((c,i)=>{
+    const L=coreLoss(c),j=judge(L,r.allow);
+    const tr=$("rows").children[i];if(!tr)return;
+    tr.querySelector(".loss").textContent=f2(L);
+    tr.querySelector(".mg").textContent=(isNaN(L)||isNaN(r.allow))?"":(r.allow-L>=0?"+":"")+(r.allow-L).toFixed(2);
+    const ch=tr.querySelector(".chip");ch.textContent=j.t;ch.className="chip v-"+j.k;
+    if(j.k==="ok")ok++;else if(j.k==="ng")ng++;else if(j.k==="warn")wr++;else none++;
+  });
+  $("counts").innerHTML='<span class="chip v-ok">OK '+ok+'</span><span class="chip v-ng">NG '+ng+'</span>'+(wr?'<span class="chip v-warn">再測定 '+wr+'</span>':"")+'<span class="chip v-none">未入力 '+none+'</span>';
+  const v=$("barVerdict");
+  if(ng){v.className="verdict v-ng";v.textContent="NG "+ng+"芯"}
+  else if(wr){v.className="verdict v-warn";v.textContent="要再測定"}
+  else if(none===S.cores.length){v.className="verdict v-none";v.textContent="未入力"}
+  else if(none){v.className="verdict v-ok";v.textContent="OK（"+ok+"/"+S.cores.length+"）"}
+  else {v.className="verdict v-ok";v.textContent="全芯 OK"}
+  $("sampleNote").textContent=S.isSample?"記入例を表示中（成績表の例を再現）":"";
+  save();
+}
+function save(){try{localStorage.setItem(KEY+".draft",JSON.stringify(S))}catch(e){}}
+
+function buildRows(){
+  const n=S.count;
+  while(S.cores.length<n)S.cores.push({color:"",rx:{m:"",neg:true},loss:""});
+  S.cores.length=n;
+  $("thIn").textContent=S.mode==="level"?"受光レベル dBm":"損失 dB（測定器表示）";
+  $("refWrap").hidden=S.mode!=="level";
+  $("rows").innerHTML=S.cores.map((c,i)=>{
+    const sel='<select id="col'+i+'" aria-label="芯'+(i+1)+'の色">'+COLORS.map(x=>'<option'+(x===c.color?" selected":"")+' value="'+x+'">'+(x||"—")+'</option>').join("")+'</select>';
+    const inp=S.mode==="level"
+      ?'<span class="lvl"><button type="button" id="sg'+i+'" aria-label="芯'+(i+1)+'の符号">'+(c.rx.neg?"−":"+")+'</button><input id="rx'+i+'" class="num" inputmode="decimal" autocomplete="off" value="'+esc(c.rx.m)+'" aria-label="芯'+(i+1)+'の受光レベル"></span>'
+      :'<input id="ls'+i+'" class="num" inputmode="decimal" autocomplete="off" value="'+esc(c.loss)+'" aria-label="芯'+(i+1)+'の損失">';
+    return '<tr><td class="no">'+(i+1)+'</td><td class="col">'+sel+'</td><td>'+inp+'</td><td class="loss">—</td><td class="mg"></td><td><span class="chip v-none">—</span></td></tr>';
+  }).join("");
+  S.cores.forEach((c,i)=>{
+    $("col"+i).onchange=e=>{c.color=e.target.value;touch();update()};
+    if(S.mode==="level"){
+      $("rx"+i).oninput=e=>{let t=e.target.value;if(/^\s*[-−ー－]/.test(t)){t=t.replace(/^\s*[-−ー－]/,"");e.target.value=t;c.rx.neg=!c.rx.neg;$("sg"+i).textContent=c.rx.neg?"−":"+"}c.rx.m=t;touch();update()};
+      $("sg"+i).onclick=()=>{c.rx.neg=!c.rx.neg;$("sg"+i).textContent=c.rx.neg?"−":"+";touch();update()};
+    }else{
+      $("ls"+i).oninput=e=>{c.loss=e.target.value;touch();update()};
+    }
+  });
+}
+function touch(){S.isSample=false}
+
+function fillWl(){$("wl").innerHTML=WL[S.type].map(w=>'<option value="'+w+'"'+(w===S.wl?" selected":"")+'>'+w+' nm</option>').join("")}
+function render(){
+  ["from","to","date","tester","dist","n1","n2","margin","fixed"].forEach(k=>$(k).value=S[k]||"");
+  $("unitBtn").textContent=S.unit;
+  $("tSM").setAttribute("aria-pressed",S.type==="SM");$("tGI").setAttribute("aria-pressed",S.type==="GI");
+  $("cMaker").setAttribute("aria-pressed",S.conn==="maker");$("cField").setAttribute("aria-pressed",S.conn==="field");
+  fillWl();
+  $("preset").value=S.preset;
+  if(S.preset==="manual"){$("K").value=S.K;$("S").value=S.S;$("C").value=S.C}
+  applyPreset();
+  $("fixedOn").checked=!!S.fixedOn;$("fixed").disabled=!S.fixedOn;
+  $("ref").value=S.ref.m;$("refSign").textContent=S.ref.neg?"−":"+";
+  $("count").innerHTML=COUNTS.map(n=>'<option value="'+n+'"'+(n===S.count?" selected":"")+'>'+n+' 芯</option>').join("");
+  buildRows();update();
+}
+
+// bindings
+["from","to","date","tester","dist","n1","n2","margin","fixed"].forEach(k=>$(k).addEventListener("input",e=>{S[k]=e.target.value;touch();update()}));
+$("unitBtn").onclick=()=>{const v=num(S.dist);if(S.unit==="m"){S.unit="km";if(!isNaN(v))S.dist=String(+(v/1000).toFixed(4))}else{S.unit="m";if(!isNaN(v))S.dist=String(+(v*1000).toFixed(1))}$("dist").value=S.dist;$("unitBtn").textContent=S.unit;update()};
+function setType(t){S.type=t;S.wl=WL[t][0];touch();fillWl();$("tSM").setAttribute("aria-pressed",t==="SM");$("tGI").setAttribute("aria-pressed",t==="GI");applyPreset();update()}
+$("tSM").onclick=()=>setType("SM");$("tGI").onclick=()=>setType("GI");
+$("wl").onchange=e=>{S.wl=+e.target.value;touch();applyPreset();update()};
+function setConn(c){S.conn=c;touch();$("cMaker").setAttribute("aria-pressed",c==="maker");$("cField").setAttribute("aria-pressed",c==="field");applyPreset();update()}
+$("cMaker").onclick=()=>setConn("maker");$("cField").onclick=()=>setConn("field");
+$("preset").onchange=e=>{S.preset=e.target.value;touch();applyPreset();update()};
+["K","S","C"].forEach(k=>$(k).addEventListener("input",e=>{S[k]=e.target.value;if(S.preset!=="manual"){S.preset="manual";$("preset").value="manual";$("presetNote").textContent="係数を手入力しています。納入仕様書の値を入れてください。"}touch();update()}));
+$("fixedOn").onchange=e=>{S.fixedOn=e.target.checked;$("fixed").disabled=!S.fixedOn;if(S.fixedOn)$("fixed").focus();touch();update()};
+$("ref").addEventListener("input",e=>{let t=e.target.value;if(/^\s*[-−ー－]/.test(t)){t=t.replace(/^\s*[-−ー－]/,"");e.target.value=t;S.ref.neg=!S.ref.neg;$("refSign").textContent=S.ref.neg?"−":"+"}S.ref.m=t;touch();update()});
+$("refSign").onclick=()=>{S.ref.neg=!S.ref.neg;$("refSign").textContent=S.ref.neg?"−":"+";touch();update()};
+$("count").onchange=e=>{S.count=+e.target.value;touch();buildRows();update()};
+
+function toast(t){$("toast").textContent=t;clearTimeout(toast._t);toast._t=setTimeout(()=>$("toast").textContent="",3000)}
+function reportText(){
+  const r=calc(),L=[];
+  L.push(["光ケーブル試験成績表"].join("\t"));
+  L.push(["測定区間",(S.from||"")+"～"+(S.to||""),"試験年月日",S.date||"","試験者",S.tester||""].join("\t"));
+  L.push(["ケーブル種別",S.type,"波長",S.wl+"nm","ケーブル長",isNaN(r.Lkm)?"":r.Lkm.toFixed(3)+"km"].join("\t"));
+  L.push(["融着 n1",r.n1,"コネクタ n2",r.n2,"コネクタ",S.conn==="field"?"現場組立":"メーカ作成"].join("\t"));
+  L.push(["K",S.K,"S",S.S,"C",S.C,"余裕",r.mg].join("\t"));
+  L.push(["許容値",f2(r.allow)+" dB",S.fixedOn?"仕様書指定":"計算値"].join("\t"));
+  L.push("");
+  L.push((S.mode==="level"?["芯線No.","色","基準レベル dBm","受光レベル dBm","損失 dB","許容値 dB","判定"]:["芯線No.","色","損失 dB","許容値 dB","判定"]).join("\t"));
+  S.cores.forEach((c,i)=>{const l=coreLoss(c),j=judge(l,r.allow);
+    const jt=j.k==="ok"?"良":j.k==="ng"?"否":j.k==="warn"?"再測定":"";
+    L.push((S.mode==="level"?[i+1,c.color,f2(lvl(S.ref)),f2(lvl(c.rx)),f2(l),f2(r.allow),jt]:[i+1,c.color,f2(l),f2(r.allow),jt]).join("\t"))});
+  return L.join("\n");
+}
+$("copyBtn").onclick=()=>{
+  const t=reportText();const fb=$("copyfb");
+  const fallback=()=>{fb.hidden=false;fb.value=t;fb.focus();fb.select();toast("自動コピーできませんでした。下の枠を選択してコピーしてください。")};
+  try{navigator.clipboard.writeText(t).then(()=>{fb.hidden=true;toast("コピーしました。Excel に貼り付けできます。")},fallback)}catch(e){fallback()}
+};
+function recs(){try{return JSON.parse(localStorage.getItem(KEY+".recs"))||[]}catch(e){return []}}
+function setRecs(a){try{localStorage.setItem(KEY+".recs",JSON.stringify(a));return true}catch(e){return false}}
+function drawRecs(){
+  const a=recs();
+  $("recList").innerHTML=a.length?a.map((x,i)=>'<div class="rec"><div class="t">'+esc((x.s.from||"—")+" ～ "+(x.s.to||"—"))+'<small>'+esc(x.s.date||"")+" ・ "+esc(x.s.type)+" ・ "+esc(x.sum)+'</small></div><button type="button" data-l="'+i+'">開く</button><button type="button" class="ghost" data-d="'+i+'">削除</button></div>').join(""):"";
+  $("recList").querySelectorAll("[data-l]").forEach(b=>b.onclick=()=>{S=JSON.parse(JSON.stringify(recs()[+b.dataset.l].s));S.mode="level";render();toast("記録を開きました");window.scrollTo({top:0})});
+  $("recList").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{
+    if(b.dataset.armed){const a=recs();a.splice(+b.dataset.d,1);setRecs(a);drawRecs();toast("削除しました")}
+    else{b.dataset.armed="1";b.textContent="もう一度で削除";setTimeout(()=>{if(b.isConnected){delete b.dataset.armed;b.textContent="削除"}},3000)}
+  });
+}
+$("saveBtn").onclick=()=>{const a=recs();a.unshift({s:JSON.parse(JSON.stringify(S)),sum:$("barVerdict").textContent+" ／ 許容値 "+$("barAllow").textContent+"dB"});if(setRecs(a.slice(0,50))){drawRecs();toast("保存しました")}else toast("この端末では保存できません。コピーで控えてください。")};
+$("newBtn").onclick=()=>{$("newConfirm").hidden=false};
+$("newNo").onclick=()=>{$("newConfirm").hidden=true};
+$("newYes").onclick=()=>{$("newConfirm").hidden=true;const keep={type:S.type,wl:S.wl,preset:S.preset,K:S.K,S:S.S,C:S.C};S=blank();if(keep.preset==="manual")Object.assign(S,keep);else{S.type=keep.type;S.wl=keep.wl;S.preset=keep.preset}render();toast("新しい測定を始めました")};
+
+render();drawRecs();
+})();
+</script>
+
+<script src="../../shared/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>電圧降下ケーブル選定</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="app-root" content="../../">
+<meta name="theme-color" content="#1f2a25">
+<link rel="manifest" href="../../manifest.webmanifest">
+<link rel="icon" href="../../icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: 1カラムの現場ツール。上=入力、中=選定結果、下=全サイズ表（タップで手配ケーブルを指定） */
+:root{
+  --bg:#eef1f3; --panel:#ffffff; --ink:#1c2328; --muted:#5d6a73; --line:#d5dbe0;
+  --copper:#b05a1e; --copper-soft:#f6e6d9; --ok:#1f7a4d; --ok-soft:#e1f2e8; --ng:#b3261e; --ng-soft:#f8e2e0;
+  --f-body:"BIZ UDPGothic","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --f-num:"JetBrains Mono",ui-monospace,"Roboto Mono",monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#14191d; --panel:#1d2429; --ink:#e7ecef; --muted:#9aa7b0; --line:#323c43;
+  --copper:#e08a4a; --copper-soft:#3a2a1e; --ok:#5cc28e; --ok-soft:#173226; --ng:#f07a70; --ng-soft:#3b1d1b; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#14191d; --panel:#1d2429; --ink:#e7ecef; --muted:#9aa7b0; --line:#323c43;
+  --copper:#e08a4a; --copper-soft:#3a2a1e; --ok:#5cc28e; --ok-soft:#173226; --ng:#f07a70; --ng-soft:#3b1d1b; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+img{max-width:100%}
+html,body{background:var(--bg);color:var(--ink);margin:0}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{font-family:var(--f-body);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 40px}
+.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.back{display:inline-flex;align-items:center;gap:4px;color:var(--muted);text-decoration:none;font-size:14px;min-height:36px;padding-right:8px}
+.back:focus-visible{outline:2px solid var(--copper);outline-offset:2px;border-radius:6px}
+header h1{font-size:20px;margin:0;text-wrap:balance;letter-spacing:.02em}
+header p{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.lbl{display:block;font-size:12px;color:var(--muted);letter-spacing:.06em;margin-bottom:6px}
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg.three{grid-template-columns:repeat(3,1fr)}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{text-align:center;padding:10px 4px;font-size:14px;cursor:pointer;border-left:1px solid var(--line);line-height:1.25}
+.seg label:first-of-type{border-left:0}
+.seg label small{display:block;font-family:var(--f-num);font-size:11px;color:var(--muted)}
+.seg input:checked+label{background:var(--copper);color:#fff}
+.seg input:checked+label small{color:#fff;opacity:.85}
+.seg input:focus-visible+label{outline:2px solid var(--copper);outline-offset:-3px}
+.grid3{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+.field{display:flex;flex-direction:column}
+.inbox{display:flex;align-items:baseline;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--bg)}
+.inbox:focus-within{border-color:var(--copper);box-shadow:0 0 0 2px var(--copper-soft)}
+.inbox input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font-family:var(--f-num);font-size:20px;font-weight:700;padding:9px 0;outline:none;font-variant-numeric:tabular-nums}
+.inbox span{font-family:var(--f-num);color:var(--muted);font-size:13px;padding-left:4px}
+.stack{display:flex;flex-direction:column;gap:12px}
+
+.result{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;align-items:center}
+.pick{grid-row:span 3;text-align:center;border:2px solid var(--copper);border-radius:10px;padding:10px 14px;min-width:96px}
+.pick .k{font-size:11px;color:var(--muted);letter-spacing:.06em}
+.pick .v{font-family:var(--f-num);font-size:34px;font-weight:700;line-height:1.1;color:var(--copper)}
+.pick .v .cv{font-size:16px;margin-right:2px;vertical-align:4px}
+.pick .u{font-family:var(--f-num);font-size:13px;color:var(--muted)}
+.kv{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dashed var(--line);padding:3px 0;font-size:13.5px}
+.kv b{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.band{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;background:var(--copper-soft);color:var(--copper);font-weight:700}
+.note{font-size:12.5px;color:var(--muted);margin:10px 0 0}
+.warn{font-size:13px;background:var(--ng-soft);color:var(--ng);border-radius:8px;padding:8px 10px;margin-top:10px}
+
+.tblwrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-size:11.5px;color:var(--muted);font-weight:400;text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);letter-spacing:.04em}
+th:first-child,td:first-child{text-align:left}
+td{font-family:var(--f-num);font-size:14px;text-align:right;padding:9px 8px;border-bottom:1px solid var(--line)}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--bg)}
+tr.ng td{color:var(--muted)}
+tr.chosen td{background:var(--copper-soft)}
+tr.chosen td:first-child{box-shadow:inset 3px 0 0 var(--copper)}
+.chip{font-family:var(--f-body);font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:99px}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.ng{background:var(--ng-soft);color:var(--ng)}
+.chip.min{background:var(--copper);color:#fff;margin-left:4px}
+.hd{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
+.hd h2{font-size:15px;margin:0}
+.hd span{font-size:12px;color:var(--muted)}
+details summary{cursor:pointer;font-size:13.5px;font-weight:700}
+details table td,details table th{font-size:12.5px;padding:6px}
+.formula{font-family:var(--f-num);font-size:13px;background:var(--bg);border-radius:6px;padding:8px 10px;overflow-x:auto;white-space:nowrap}
+/* 広い画面（タブレット横向き・パソコン）：左に入力、右に結果 */
+@media (min-width:900px){
+  .wrap{max-width:1120px;display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:16px 20px;align-items:start}
+  .wrap>header{grid-column:1/-1}
+  .wrap>.in{grid-column:1;grid-row:2/span 3;position:sticky;top:16px}
+  .wrap>.out{grid-column:2}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="back" href="../../index.html">‹ メニュー</a>
+    <h1>電圧降下ケーブル選定</h1>
+    <p>内線規程 1310節（旧120節）の電圧降下許容値による銅導体ケーブルの選定</p>
+  </header>
+
+  <section class="panel stack in" aria-label="入力">
+    <div>
+      <span class="lbl">施設区分</span>
+      <div class="seg" role="radiogroup">
+        <input type="radio" name="cub" id="cub1" value="1" checked><label for="cub1">キュービクルあり<small>構内変圧器から供給</small></label>
+        <input type="radio" name="cub" id="cub0" value="0"><label for="cub0">キュービクルなし<small>低圧受電</small></label>
+      </div>
+    </div>
+    <div>
+      <span class="lbl">配電方式（係数 K）</span>
+      <div class="seg three" role="radiogroup">
+        <input type="radio" name="sys" id="sys1" value="35.6"><label for="sys1">単相2線<small>35.6</small></label>
+        <input type="radio" name="sys" id="sys2" value="30.8"><label for="sys2">三相3線<small>30.8</small></label>
+        <input type="radio" name="sys" id="sys3" value="17.8" checked><label for="sys3">単相3線<br>三相4線<small>17.8</small></label>
+      </div>
+    </div>
+    <div>
+      <span class="lbl">ケーブル種別</span>
+      <div class="seg three" role="radiogroup">
+        <input type="radio" name="cab" id="cabCV" value="CV" checked><label for="cabCV">CV</label>
+        <input type="radio" name="cab" id="cabCVT" value="CVT"><label for="cabCVT">CVT<small>8〜325sq</small></label>
+        <input type="radio" name="cab" id="cabVVF" value="VVF"><label for="cabVVF">VVF<small>1.6〜2.6mm</small></label>
+      </div>
+    </div>
+    <div>
+      <span class="lbl">電圧（標準電圧）</span>
+      <div class="seg" role="radiogroup">
+        <input type="radio" name="vol" id="vol100" value="100" checked><label for="vol100">100V</label>
+        <input type="radio" name="vol" id="vol200" value="200"><label for="vol200">200V</label>
+      </div>
+    </div>
+    <div class="grid3" style="margin-top:0">
+      <div class="field"><label class="lbl" for="len">配線距離</label><div class="inbox"><input id="len" type="number" inputmode="decimal" min="0" value="60"><span>m</span></div></div>
+      <div class="field"><label class="lbl" for="cur">使用電流</label><div class="inbox"><input id="cur" type="number" inputmode="decimal" min="0" value="85"><span>A</span></div></div>
+    </div>
+  </section>
+
+  <section class="panel out" aria-label="選定結果">
+    <div class="result">
+      <div class="pick"><div class="k">選定サイズ</div><div class="v" id="rPick">—</div><div class="u" id="rUnit">mm²</div></div>
+      <div class="kv"><span>適用区分</span><span class="band" id="rBand">—</span></div>
+      <div class="kv"><span>許容電圧降下</span><b id="rAllow">—</b></div>
+      <div class="kv"><span>必要断面積（計算値）</span><b id="rNeed">—</b></div>
+    </div>
+    <div id="rWarn"></div>
+    <div class="note" id="rChosen"></div>
+  </section>
+
+  <section class="panel out" aria-label="サイズ別一覧">
+    <div class="hd"><h2>サイズ別の電圧降下</h2><span>行をタップで手配ケーブルを指定</span></div>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>ケーブル</th><th>降下 V</th><th>降下率</th><th>受電端 V</th><th>判定</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel stack out">
+    <details>
+      <summary>計算式と許容値表</summary>
+      <div class="stack" style="margin-top:10px">
+        <div class="formula" id="fx"></div>
+        <div class="tblwrap"><table>
+          <thead><tr><th>こう長</th><th>キュービクルあり</th><th>キュービクルなし</th></tr></thead>
+          <tbody id="allowRows"></tbody></table></div>
+        <p class="note" style="margin:0" id="shortNote"></p>
+        <p class="note" style="margin:0">電圧降下だけで選んだ結果です。許容電流（布設条件・低減率）、遮断器との協調は別途確認してください。</p>
+      </div>
+    </details>
+  </section>
+</div>
+
+<script src="../../shared/app.js"></script>
+<script src="../../data/voltage-drop-data.js"></script>
+<script>
+const D=window.VD_DATA;
+const CABLE=D.cables;
+const lab=(type,a)=>CABLE[type].labels?CABLE[type].labels[String(a)]:String(a);
+let SIZES=CABLE.CV.sizes;
+const $=id=>document.getElementById(id);
+let chosen=null; // 手動で指定した手配ケーブル
+
+function rateFor(len,cub){
+  const row=D.allowance.find(r=>len<=r.maxLength);
+  return {band:row.label,rate:cub?row.cubicle:row.lowVoltage};
+}
+const drop=(K,L,I,A)=>K*L*I/(1000*A);
+const fmt=(n,d=2)=>Number.isFinite(n)?n.toFixed(d):"—";
+
+/* 許容値表と60m以下の注記はデータから作る */
+$("allowRows").innerHTML=D.allowance.map(r=>`<tr><td>${r.label}</td><td>${r.cubicle}%</td><td>${r.lowVoltage}%</td></tr>`).join("");
+$("shortNote").textContent=`60m以下の場合、内線規程では幹線・分岐回路をそれぞれ別に規定しています（キュービクルあり：幹線${D.short60.cubicleMain}%・分岐${D.short60.branch}%、なし：幹線${D.short60.lowVoltageMain}%・分岐${D.short60.branch}%）。このアプリは手持ちの計算表に合わせ、60m以下も「${D.allowance[0].label}」の合計値で判定します。`;
+
+function calc(){
+  const cub=document.querySelector('input[name=cub]:checked').value==="1";
+  const type=document.querySelector('input[name=cab]:checked').value;
+  SIZES=CABLE[type].sizes; const unit=CABLE[type].unit;
+  $("rUnit").textContent=unit;
+  const K=parseFloat(document.querySelector('input[name=sys]:checked').value);
+  const L=parseFloat($("len").value), I=parseFloat($("cur").value), V=parseFloat(document.querySelector('input[name=vol]:checked').value);
+  save();
+  const valid=[L,I,V].every(x=>Number.isFinite(x)&&x>0);
+  if(!valid){$("tbody").innerHTML="";["rPick","rBand","rAllow","rNeed"].forEach(i=>$(i).textContent="—");
+    $("rWarn").innerHTML='<div class="warn">配線距離と使用電流を入力してください。</div>';$("rChosen").textContent="";return;}
+  const {band,rate}=rateFor(L,cub);
+  const eAllow=V*rate/100;
+  const need=K*L*I/(1000*eAllow);
+  const pick=SIZES.find(s=>s>=need);
+  $("rBand").textContent=`${band}・${rate}%`;
+  $("rAllow").textContent=`${fmt(eAllow)} V`;
+  $("rNeed").textContent=`${fmt(need,1)} mm²`;
+  $("rPick").innerHTML=pick?`<span class="cv">${type}</span>${lab(type,pick)}`:"超過";
+  let w="";
+  if(!pick) w+= type==="VVF"
+    ? `<div class="warn">VVF 2.6mmでも許容値を超えます。CV・CVTでの選定を検討してください。</div>`
+    : `<div class="warn">325mm²でも許容値を超えます。並列布設（必要断面積を本数で割る）や電圧の見直しを検討してください。</div>`;
+  if(type==="VVF") w+=`<p class="note">VVFは導体径で表示しています。計算は断面積（1.6mm=2.01mm²、2.0mm=3.14mm²、2.6mm=5.31mm²）で行っています。</p>`;
+  if(L<=60) w+=`<p class="note">60m以下：内線規程上は幹線${cub?D.short60.cubicleMain:D.short60.lowVoltageMain}%・分岐${D.short60.branch}%の個別規定があります（詳細は下部）。</p>`;
+  $("rWarn").innerHTML=w;
+
+  if(chosen!==null && !SIZES.includes(chosen)) chosen=null;
+  $("tbody").innerHTML=SIZES.map(s=>{
+    const e=drop(K,L,I,s), p=e/V*100, ok=e<=eAllow;
+    const cls=[ok?"":"ng", s===chosen?"chosen":""].join(" ");
+    return `<tr class="${cls}" data-s="${s}" tabindex="0"><td>${type}${lab(type,s)}</td><td>${fmt(e)}</td><td>${fmt(p)}%</td><td>${fmt(V-e,1)}</td>
+      <td><span class="chip ${ok?"ok":"ng"}">${ok?"OK":"NG"}</span>${s===pick?'<span class="chip min">最小</span>':""}</td></tr>`;
+  }).join("");
+
+  const ref=chosen??pick??SIZES[SIZES.length-1];
+  const e=drop(K,L,I,ref);
+  $("rChosen").innerHTML = chosen!==null
+    ? `手配ケーブル ${type}${lab(type,chosen)}${unit}：降下 ${fmt(e)}V（${fmt(e/V*100)}%）→ <b style="color:var(${e<=eAllow?'--ok':'--ng'})">${e<=eAllow?"許容内":"許容超過"}</b>`
+    : "一覧の行をタップすると、そのサイズを手配ケーブルとして確認できます。";
+  $("fx").textContent=`e = ${K} × ${L}m × ${I}A ÷ (1000 × ${ref}mm²) = ${fmt(e,3)} V`;
+}
+
+function save(){try{localStorage.setItem("vdrop",JSON.stringify({
+  cub:document.querySelector('input[name=cub]:checked').id, sys:document.querySelector('input[name=sys]:checked').id,
+  vol:document.querySelector('input[name=vol]:checked').id,cab:document.querySelector('input[name=cab]:checked').id,len:$("len").value,cur:$("cur").value}))}catch(e){}}
+function load(){try{const d=JSON.parse(localStorage.getItem("vdrop")||"null");if(!d)return;
+  [d.cub,d.sys,d.vol,d.cab].forEach(id=>{const el=id&&$(id);if(el&&el.type==="radio")el.checked=true});
+  ["len","cur"].forEach(k=>{if(d[k]!=null)$(k).value=d[k]})}catch(e){}}
+
+document.addEventListener("input",e=>{if(e.target.matches("input"))calc()});
+function choose(tr){const s=parseFloat(tr.dataset.s);chosen=(chosen===s)?null:s;calc();}
+$("tbody").addEventListener("click",e=>{const tr=e.target.closest("tr");if(tr)choose(tr)});
+$("tbody").addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.matches("tr")){e.preventDefault();choose(e.target)}});
+load();calc();
+</script>
+</body>
+</html>

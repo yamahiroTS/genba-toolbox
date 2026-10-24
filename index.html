@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>現場ツール箱</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="app-root" content="./">
+<meta name="theme-color" content="#1f2a25">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="shared/app.css">
+</head>
+<body>
+<header class="app-head">
+  <h1>現場ツール箱</h1>
+  <span class="badge-ver" data-app-version></span>
+</header>
+
+<main>
+  <p class="section-label">ツールを選ぶ</p>
+  <ul class="tool-list" id="tool-list"></ul>
+
+  <p class="foot">電波のない現場でも使えるよう、一度開いたツールは端末に保存されます。</p>
+</main>
+
+<footer class="credit">© 2026 Yamahiro TS Inc.</footer>
+
+<script src="shared/app.js"></script>
+<script src="shared/tools.js"></script>
+<script>
+  (function () {
+    var list = document.getElementById("tool-list");
+    TOOLS.forEach(function (t) {
+      var li = document.createElement("li");
+      var ready = t.status === "ready";
+      var el = document.createElement(ready ? "a" : "div");
+      el.className = "tool" + (ready ? "" : " soon");
+      if (ready) el.href = t.path; else el.setAttribute("aria-disabled", "true");
+      el.innerHTML =
+        '<span class="ico" aria-hidden="true">' + t.icon + '</span>' +
+        '<div><div class="name"></div><div class="desc"></div></div>' +
+        (ready ? '<span class="chev" aria-hidden="true">›</span>' : '<span class="tag">準備中</span>');
+      el.querySelector(".name").textContent = t.name;
+      el.querySelector(".desc").textContent = t.desc;
+      li.appendChild(el);
+      list.appendChild(li);
+    });
+  })();
+</script>
+</body>
+</html>
