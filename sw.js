@@ -1,7 +1,7 @@
 /* オフライン対応（Service Worker）
    ファイルを修正・追加したら CACHE_NAME の版数を上げてください。
    スマホ側は次回起動時に新しいファイルを取り込みます。 */
-const CACHE_NAME = "genba-toolbox-v0.4.2";
+const CACHE_NAME = "genba-toolbox-v0.4.3";
 
 const APP_FILES = [
   "./",
