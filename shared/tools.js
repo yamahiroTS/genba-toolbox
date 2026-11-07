@@ -28,14 +28,6 @@ window.TOOLS = [
     icon: '<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 27V6"/><path d="M27 27V6"/><path d="M5 9c7 7 15 7 22 0"/><path d="M11 14v4M16 15.5v4M21 14v4"/></svg>'
   },
   {
-    id: "hotel",
-    name: "宿泊先検索",
-    desc: "現場と日付から、車で30分圏内の空室を探す（東横イン・ルートイン・HOTEL AZ優先）",
-    path: "tools/hotel/index.html",
-    status: "ready",
-    icon: '<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 26V8"/><path d="M4 19h24v7"/><path d="M28 19v-3a4 4 0 0 0-4-4H14v7"/><circle cx="9" cy="14.5" r="2.4"/></svg>'
-  },
-  {
     id: "scanner",
     name: "書類スキャナー",
     desc: "斜めから撮った書類を自動で切り抜き・台形補正し、A4／A3のPDFにする（端末内で処理）",
