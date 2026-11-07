@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>書類スキャナー</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="app-root" content="../../">
+<meta name="theme-color" content="#1f2a25">
+<link rel="manifest" href="../../manifest.webmanifest">
+<link rel="icon" href="../../icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout（ツール箱 4番目）: one narrow column, capture first, page list in the middle, a sticky save bar at the bottom; the editor is a full-screen dark stage. */
+:root{
+  --bg:#eceff1; --surface:#ffffff; --ink:#17202a; --muted:#5b6672; --line:#d3d9de;
+  --accent:#3f4fa3; --accent-ink:#ffffff; --accent-soft:#e2e5f5;
+  --stage:#1b2128; --stage-ink:#e9edf0; --danger:#b3392d;
+  --f-body:"BIZ UDPGothic","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"Roboto Mono",monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11151a; --surface:#1a2027; --ink:#e6eaed; --muted:#9aa5af; --line:#2b333b;
+  --accent:#909cf0; --accent-ink:#0f1330; --accent-soft:#232a4d;
+  --stage:#0a0d10; --stage-ink:#e6eaed; --danger:#e0695c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11151a; --surface:#1a2027; --ink:#e6eaed; --muted:#9aa5af; --line:#2b333b;
+  --accent:#909cf0; --accent-ink:#0f1330; --accent-soft:#232a4d;
+  --stage:#0a0d10; --stage-ink:#e6eaed; --danger:#e0695c; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+img{max-width:100%}
+html,body{margin:0}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6}
+.app{max-width:640px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 150px;display:flex;flex-direction:column;gap:18px}
+header.top{display:flex;gap:12px;align-items:flex-start}
+.back{display:inline-flex;align-items:center;gap:4px;color:var(--muted);text-decoration:none;font-size:14px;min-height:36px;padding-right:8px;align-self:flex-start;margin-bottom:-10px}
+.back:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.mark{flex:none;width:40px;height:40px;border-radius:9px;background:var(--accent);display:grid;place-items:center}
+.mark svg{width:24px;height:24px}
+h1{margin:0;font-size:21px;line-height:1.3;font-weight:700;text-wrap:balance}
+header p{margin:2px 0 0;color:var(--muted);font-size:13.5px}
+.capture{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-weight:500;border-radius:var(--r);padding:12px 14px;min-height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent}
+.btn svg{width:20px;height:20px;flex:none}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible,.seg button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.btn[disabled]{opacity:.45;cursor:default}
+.tip{font-size:13px;color:var(--muted);border-left:3px solid var(--accent);padding:2px 0 2px 10px;margin:0}
+.section-h{display:flex;justify-content:space-between;align-items:baseline;margin:4px 0 -6px}
+.section-h h2{font-size:14px;margin:0;letter-spacing:.06em;color:var(--muted);font-weight:500}
+.count{font-family:var(--f-mono);font-size:13px;color:var(--muted)}
+#pages{display:flex;flex-direction:column;gap:10px;list-style:none;margin:0;padding:0}
+.pg{display:grid;grid-template-columns:76px 1fr auto;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px}
+.pg img{width:76px;height:96px;object-fit:contain;background:var(--bg);border-radius:4px;display:block}
+.pg .meta{min-width:0}
+.pg .no{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.pg .spec{font-weight:700}
+.pg .act{display:flex;flex-direction:column;gap:6px}
+.icon-btn{appearance:none;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;width:40px;height:34px;display:grid;place-items:center;cursor:pointer}
+.icon-btn svg{width:18px;height:18px}
+.icon-btn[disabled]{opacity:.3}
+.pg .row2{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.pg .row2 .btn{min-height:34px;padding:4px 12px;font-size:14px}
+.empty{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px}
+.demo{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center}
+.demo figure{margin:0;display:flex;flex-direction:column;gap:4px;min-width:0}
+.demo canvas,.demo img{width:100%;height:auto;border-radius:6px;background:var(--bg);display:block}
+.demo figcaption{font-size:12px;color:var(--muted);text-align:center}
+.demo .arrow{color:var(--accent);font-size:20px}
+.empty p{margin:0;font-size:14px}
+/* save bar */
+.savebar{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--surface);border-top:1px solid var(--line);padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.savebar .in{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
+.savebar .r{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.field{display:flex;align-items:center;gap:6px;flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--bg)}
+.field input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:inherit;padding:9px 0}
+.field span{font-family:var(--f-mono);color:var(--muted);font-size:13px}
+.savebar .btn.primary{flex:1;min-width:160px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg)}
+.seg button{appearance:none;border:0;background:transparent;color:var(--ink);font:inherit;font-size:14px;padding:7px 12px;min-height:36px;cursor:pointer;white-space:nowrap}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.lbl{font-size:12px;color:var(--muted);letter-spacing:.04em}
+/* editor */
+.editor{position:fixed;inset:0;z-index:20;background:var(--stage);color:var(--stage-ink);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.editor .bar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px max(12px,env(safe-area-inset-right,0px)) 8px max(12px,env(safe-area-inset-left,0px))}
+.editor .bar h2{font-size:15px;margin:0;font-weight:500}
+.editor .btn{background:transparent;color:var(--stage-ink);border-color:#3a444e}
+.editor .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.tabs{display:flex;justify-content:center;gap:0;padding:0 12px 6px}
+.tabs .seg{background:transparent;border-color:#3a444e}
+.tabs .seg button{color:var(--stage-ink)}
+.tabs .seg button+button{border-color:#3a444e}
+.stage{flex:1;min-height:0;position:relative;display:grid;place-items:center;overflow:hidden;padding:4px 12px}
+#edCanvas{touch-action:none;display:block}
+#edResult{max-width:100%;max-height:100%;object-fit:contain;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.5)}
+#loupe{position:absolute;top:10px;width:120px;height:120px;border-radius:50%;border:2px solid var(--accent);box-shadow:0 2px 10px rgba(0,0,0,.6);pointer-events:none;background:#000}
+.controls{background:var(--surface);color:var(--ink);border-radius:14px 14px 0 0;padding:12px max(14px,env(safe-area-inset-right,0px)) 12px max(14px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:10px;max-height:46vh;overflow-y:auto}
+.ctl{display:grid;grid-template-columns:64px 1fr;align-items:center;gap:8px}
+.ctl .seg{justify-self:start;max-width:100%;overflow-x:auto}
+.ctl-actions{display:flex;gap:8px;flex-wrap:wrap}
+.ctl-actions .btn{min-height:38px;padding:6px 12px;font-size:14px;flex:1;background:var(--bg);color:var(--ink);border-color:var(--line)}
+.hint{font-size:12.5px;color:var(--muted);margin:0}
+/* busy + toast */
+.busy{position:fixed;inset:0;z-index:40;background:rgba(10,13,16,.62);display:grid;place-items:center}
+.busy .box{background:var(--surface);color:var(--ink);border-radius:12px;padding:18px 22px;display:flex;gap:12px;align-items:center;font-weight:500}
+.spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--accent);animation:sp 0.9s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(140px + env(safe-area-inset-bottom,0px));z-index:50;background:var(--ink);color:var(--bg);border-radius:10px;padding:10px 14px;display:flex;gap:12px;align-items:center;font-size:14px;max-width:calc(100% - 32px)}
+.toast button{appearance:none;border:0;background:transparent;color:var(--accent);font:inherit;font-weight:700;cursor:pointer}
+@media (prefers-reduced-motion: reduce){.spin{animation-duration:3s}.btn:active{transform:none}}
+@media (max-width:380px){.capture{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="app" id="home">
+  <a class="back" href="../../index.html">‹ メニュー</a>
+  <header class="top">
+    <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent-ink)"><path d="M6 3 3 6M18 3l3 3M6 21l-3-3M18 21l3-3"/><path d="M8 7h8v10H8z"/></svg></div>
+    <div>
+      <h1>書類スキャナー</h1>
+      <p>斜めから撮った書類を自動で切り抜き、A4／A3の形に補正してPDFにします。写真はこの端末の外へ送信しません。</p>
+    </div>
+  </header>
+
+  <div class="capture">
+    <label class="btn primary" for="camIn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>撮影する</label>
+    <label class="btn" for="picIn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6"/></svg>写真を選ぶ</label>
+    <input id="camIn" type="file" accept="image/*" capture="environment" hidden>
+    <input id="picIn" type="file" accept="image/*" multiple hidden>
+  </div>
+  <p class="tip">一番きれいに仕上げるには、標準カメラで撮ってから「写真を選ぶ」で読み込みます。照明の映り込みを避けるときは、3倍望遠で少し離れ、真上から30°以内の傾きで撮ってください。</p>
+
+  <div class="section-h"><h2>ページ</h2><span class="count" id="pgCount">0 ページ</span></div>
+  <ol id="pages"></ol>
+
+  <div class="empty" id="empty">
+    <div class="demo">
+      <figure><canvas id="demoBefore" width="300" height="225"></canvas><figcaption>撮影した写真</figcaption></figure>
+      <span class="arrow" aria-hidden="true">→</span>
+      <figure><img id="demoAfter" alt="補正後のサンプル"><figcaption>補正後（A4）</figcaption></figure>
+    </div>
+    <p>撮影するか写真を選ぶと、書類の四隅を自動で見つけます。枠がずれていたら角をドラッグして合わせてください。</p>
+    <button class="btn" id="trySample" type="button">サンプル写真で試す</button>
+  </div>
+</div>
+
+<div class="savebar">
+  <div class="in">
+    <div class="r">
+      <div class="field"><input id="fname" aria-label="ファイル名" autocomplete="off"><span>.pdf</span></div>
+      <div class="seg" id="dpiSeg" role="group" aria-label="画質">
+        <button type="button" data-v="200" aria-pressed="true">標準</button>
+        <button type="button" data-v="300" aria-pressed="false">高画質</button>
+      </div>
+    </div>
+    <div class="r"><button class="btn primary" id="saveBtn" type="button" disabled>PDFを保存</button></div>
+  </div>
+</div>
+
+<div class="editor" id="editor" hidden>
+  <div class="bar">
+    <button class="btn" id="edBack" type="button">戻る</button>
+    <h2 id="edTitle">ページの調整</h2>
+    <button class="btn primary" id="edOk" type="button">決定</button>
+  </div>
+  <div class="tabs"><div class="seg" id="tabSeg" role="group" aria-label="表示">
+    <button type="button" data-v="frame" aria-pressed="true">枠の調整</button>
+    <button type="button" data-v="result" aria-pressed="false">仕上がり</button>
+  </div></div>
+  <div class="stage" id="stage">
+    <canvas id="edCanvas"></canvas>
+    <img id="edResult" alt="仕上がりのプレビュー" hidden>
+    <canvas id="loupe" width="240" height="240" hidden></canvas>
+  </div>
+  <div class="controls">
+    <div class="ctl"><span class="lbl">用紙</span><div class="seg" id="sizeSeg" role="group" aria-label="用紙">
+      <button type="button" data-v="A4">A4</button><button type="button" data-v="A3">A3</button></div></div>
+    <div class="ctl"><span class="lbl">向き</span><div class="seg" id="orientSeg" role="group" aria-label="向き">
+      <button type="button" data-v="auto">自動</button><button type="button" data-v="portrait">縦</button><button type="button" data-v="landscape">横</button></div></div>
+    <div class="ctl"><span class="lbl">仕上がり</span><div class="seg" id="modeSeg" role="group" aria-label="仕上がり">
+      <button type="button" data-v="color">カラー</button><button type="button" data-v="gray">グレー</button><button type="button" data-v="bw">白黒</button><button type="button" data-v="raw">補正なし</button></div></div>
+    <div class="ctl-actions">
+      <button class="btn" id="edDetect" type="button">自動検出</button>
+      <button class="btn" id="edFull" type="button">写真全体</button>
+      <button class="btn" id="edRot" type="button">90°回転</button>
+    </div>
+    <p class="hint">「上」の印がある辺が用紙の上になります。向きが違うときは90°回転を押してください。</p>
+  </div>
+</div>
+
+<div class="busy" id="busy" hidden><div class="box"><div class="spin"></div><span id="busyText">処理中…</span></div></div>
+<div class="toast" id="toast" hidden><span id="toastText"></span><button id="toastAct" type="button" hidden></button></div>
+
+<script id="core">
+/* ===== Image core: pure functions on RGBA arrays (no DOM) ===== */
+const PAPER={A4:[210,297],A3:[297,420]};
+const PT_PER_MM=72/25.4;
+
+function otsu(hist,total){let sum=0;for(let i=0;i<256;i++)sum+=i*hist[i];let sB=0,wB=0,best=0,t=128;
+  for(let i=0;i<256;i++){wB+=hist[i];if(!wB)continue;const wF=total-wB;if(!wF)break;sB+=i*hist[i];
+    const mB=sB/wB,mF=(sum-sB)/wF,v=wB*wF*(mB-mF)*(mB-mF);if(v>best){best=v;t=i;}}return t;}
+
+function morph(m,w,h,r,dil){const tmp=new Uint8Array(m.length),out=new Uint8Array(m.length);
+  for(let y=0;y<h;y++){const o=y*w;let s=0;for(let x=0;x<=r&&x<w;x++)s+=m[o+x];
+    for(let x=0;x<w;x++){const cnt=Math.min(x+r,w-1)-Math.max(x-r,0)+1;tmp[o+x]=dil?(s>0?1:0):(s===cnt?1:0);
+      if(x+r+1<w)s+=m[o+x+r+1];if(x-r>=0)s-=m[o+x-r];}}
+  for(let x=0;x<w;x++){let s=0;for(let y=0;y<=r&&y<h;y++)s+=tmp[y*w+x];
+    for(let y=0;y<h;y++){const cnt=Math.min(y+r,h-1)-Math.max(y-r,0)+1;out[y*w+x]=dil?(s>0?1:0):(s===cnt?1:0);
+      if(y+r+1<h)s+=tmp[(y+r+1)*w+x];if(y-r>=0)s-=tmp[(y-r)*w+x];}}
+  return out;}
+
+function convexHull(pts){pts=pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+  const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);const lo=[],up=[];
+  for(const p of pts){while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p);}
+  for(let i=pts.length-1;i>=0;i--){const p=pts[i];while(up.length>=2&&cr(up[up.length-2],up[up.length-1],p)<=0)up.pop();up.push(p);}
+  up.pop();lo.pop();return lo.concat(up);}
+
+function polyArea(P){let a=0;for(let k=0;k<P.length;k++){const p=P[k],q=P[(k+1)%P.length];a+=p[0]*q[1]-q[0]*p[1];}return a/2;}
+
+function maxQuad(H){const n=H.length;const arg=(f,mx)=>{let bi=0,bv=mx?-Infinity:Infinity;for(let i=0;i<n;i++){const v=f(H[i]);if(mx?v>bv:v<bv){bv=v;bi=i;}}return bi;};
+  let idx=[arg(p=>p[0]+p[1],0),arg(p=>p[0]-p[1],1),arg(p=>p[0]+p[1],1),arg(p=>p[0]-p[1],0)];
+  const sg=Math.sign(polyArea(H))||1;const A=ix=>sg*polyArea(ix.map(i=>H[i]));let best=A(idx);
+  for(let it=0;it<20;it++){let ch=false;for(let k=0;k<4;k++)for(let j=0;j<n;j++){const t=idx.slice();t[k]=j;const a=A(t);if(a>best+1e-9){best=a;idx=t;ch=true;}}if(!ch)break;}
+  return idx.map(i=>H[i]);}
+
+function orderQuad(q){const cx=q.reduce((s,p)=>s+p[0],0)/4,cy=q.reduce((s,p)=>s+p[1],0)/4;
+  const s=q.slice().sort((a,b)=>Math.atan2(a[1]-cy,a[0]-cx)-Math.atan2(b[1]-cy,b[0]-cx));
+  let k=0,bv=Infinity;s.forEach((p,i)=>{if(p[0]+p[1]<bv){bv=p[0]+p[1];k=i;}});return [0,1,2,3].map(i=>s[(k+i)%4]);}
+
+/* Find the sheet of paper: bright, low-chroma pixels -> largest blob -> convex hull -> biggest inscribed quad. Returns normalized corners or null. */
+function detectQuadData(d,w,h){const n=w*h,sc=new Uint8Array(n),hist=new Float64Array(256);
+  for(let i=0,j=0;i<n;i++,j+=4){const r=d[j],g=d[j+1],b=d[j+2],mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+    let s=0.299*r+0.587*g+0.114*b-0.7*(mx-mn);s=s<0?0:s>255?255:s|0;sc[i]=s;hist[s]++;}
+  const t=otsu(hist,n);let m=new Uint8Array(n);for(let i=0;i<n;i++)m[i]=sc[i]>t?1:0;
+  const r=Math.max(1,Math.round(Math.max(w,h)/220));m=morph(morph(m,w,h,r,false),w,h,r,true);
+  const lab=new Int32Array(n),st=new Int32Array(n);let best=0,bestA=0,cur=0;
+  for(let i=0;i<n;i++){if(!m[i]||lab[i])continue;cur++;let a=0,sp=0;st[sp++]=i;lab[i]=cur;
+    while(sp){const p=st[--sp];a++;const x=p%w;
+      if(x>0&&m[p-1]&&!lab[p-1]){lab[p-1]=cur;st[sp++]=p-1;}
+      if(x<w-1&&m[p+1]&&!lab[p+1]){lab[p+1]=cur;st[sp++]=p+1;}
+      if(p>=w&&m[p-w]&&!lab[p-w]){lab[p-w]=cur;st[sp++]=p-w;}
+      if(p+w<n&&m[p+w]&&!lab[p+w]){lab[p+w]=cur;st[sp++]=p+w;}}
+    if(a>bestA){bestA=a;best=cur;}}
+  if(bestA<n*0.06||bestA>n*0.97)return null;
+  const pts=[];for(let y=0;y<h;y++){let l=-1,rr=-1;const o=y*w;for(let x=0;x<w;x++)if(lab[o+x]===best){if(l<0)l=x;rr=x;}
+    if(l>=0){pts.push([l,y],[rr+1,y]);}}
+  const H=convexHull(pts);if(H.length<4)return null;const q=orderQuad(maxQuad(H));
+  if(Math.abs(polyArea(q))<n*0.05)return null;
+  return q.map(([x,y])=>[Math.min(1,Math.max(0,x/w)),Math.min(1,Math.max(0,y/h))]);}
+
+/* 8-parameter homography mapping from[k] -> to[k] */
+function homog(from,to){const A=[];for(let k=0;k<4;k++){const[u,v]=from[k],[x,y]=to[k];
+    A.push([u,v,1,0,0,0,-u*x,-v*x,x]);A.push([0,0,0,u,v,1,-u*y,-v*y,y]);}
+  for(let c=0;c<8;c++){let p=c;for(let r=c+1;r<8;r++)if(Math.abs(A[r][c])>Math.abs(A[p][c]))p=r;[A[c],A[p]]=[A[p],A[c]];
+    for(let r=0;r<8;r++){if(r===c)continue;const f=A[r][c]/A[c][c];for(let k=c;k<9;k++)A[r][k]-=f*A[c][k];}}
+  return A.map((row,i)=>row[8]/row[i]);}
+
+/* Perspective warp: output W x H rectangle sampled from the quad (pixel coords) in src. */
+function warp(src,sw,sh,quadPx,W,H){const[a,b,c,d,e,f,g,k]=homog([[0,0],[W,0],[W,H],[0,H]],quadPx);
+  const out=new Uint8ClampedArray(W*H*4),mxX=sw-1.001,mxY=sh-1.001,row=sw*4;let o=0;
+  for(let y=0;y<H;y++){const v=y+0.5;let nx=a*0.5+b*v+c,ny=d*0.5+e*v+f,dn=g*0.5+k*v+1;
+    for(let x=0;x<W;x++){let sx=nx/dn-0.5,sy=ny/dn-0.5;nx+=a;ny+=d;dn+=g;
+      sx=sx<0?0:sx>mxX?mxX:sx;sy=sy<0?0:sy>mxY?mxY:sy;
+      const x0=sx|0,y0=sy|0,fx=sx-x0,fy=sy-y0,i0=(y0*sw+x0)*4,i2=i0+row;
+      const w00=(1-fx)*(1-fy),w10=fx*(1-fy),w01=(1-fx)*fy,w11=fx*fy;
+      out[o]=src[i0]*w00+src[i0+4]*w10+src[i2]*w01+src[i2+4]*w11;
+      out[o+1]=src[i0+1]*w00+src[i0+5]*w10+src[i2+1]*w01+src[i2+5]*w11;
+      out[o+2]=src[i0+2]*w00+src[i0+6]*w10+src[i2+2]*w01+src[i2+6]*w11;
+      out[o+3]=255;o+=4;}}
+  return out;}
+
+/* Flatten uneven lighting (paper -> white), then stretch contrast. mode: color | gray | bw | raw */
+function enhance(d,W,H,mode){if(mode==='raw')return d;const n=W*H,lum=new Uint8Array(n);
+  for(let i=0,j=0;i<n;i++,j+=4)lum[i]=(d[j]*77+d[j+1]*150+d[j+2]*29)>>8;
+  const B=Math.max(8,Math.round(Math.max(W,H)/90)),gw=Math.ceil(W/B),gh=Math.ceil(H/B);let bg=new Float32Array(gw*gh);const hist=new Uint32Array(256);
+  for(let by=0;by<gh;by++)for(let bx=0;bx<gw;bx++){hist.fill(0);let cnt=0;const y1=Math.min(H,(by+1)*B),x1=Math.min(W,(bx+1)*B);
+    for(let y=by*B;y<y1;y+=2)for(let x=bx*B;x<x1;x+=2){hist[lum[y*W+x]]++;cnt++;}
+    let acc=0,v=255;const tgt=cnt*0.08;for(;v>0;v--){acc+=hist[v];if(acc>=tgt)break;}bg[by*gw+bx]=v;}
+  const filt=(src,mx)=>{const o=new Float32Array(src.length);for(let y=0;y<gh;y++)for(let x=0;x<gw;x++){let s=mx?0:0,c=0;
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const yy=y+dy,xx=x+dx;if(yy<0||xx<0||yy>=gh||xx>=gw)continue;const v=src[yy*gw+xx];if(mx){if(v>s)s=v;}else{s+=v;c++;}}
+      o[y*gw+x]=mx?s:s/c;}return o;};
+  bg=filt(bg,true);bg=filt(filt(bg,false),false);
+  const srt=Array.from(bg).sort((a,b)=>a-b),floor=Math.max(40,srt[srt.length>>1]*0.55);for(let i=0;i<bg.length;i++)if(bg[i]<floor)bg[i]=floor;
+  const rowBg=new Float32Array(gw),gainRow=new Float32Array(W),lh=new Uint32Array(256);
+  for(let y=0;y<H;y++){let gy=(y+0.5)/B-0.5;gy=gy<0?0:gy>gh-1?gh-1:gy;const y0=gy|0,y1=Math.min(gh-1,y0+1),ty=gy-y0;
+    for(let x=0;x<gw;x++)rowBg[x]=bg[y0*gw+x]*(1-ty)+bg[y1*gw+x]*ty;
+    for(let x=0;x<W;x++){let gx=(x+0.5)/B-0.5;gx=gx<0?0:gx>gw-1?gw-1:gx;const x0=gx|0,x1=Math.min(gw-1,x0+1),tx=gx-x0;gainRow[x]=245/(rowBg[x0]*(1-tx)+rowBg[x1]*tx);}
+    for(let x=0,i=y*W,j=i*4;x<W;x++,i++,j+=4){const gn=gainRow[x];d[j]=d[j]*gn;d[j+1]=d[j+1]*gn;d[j+2]=d[j+2]*gn;const l=(d[j]*77+d[j+1]*150+d[j+2]*29)>>8;lum[i]=l;lh[l]++;}}
+  let acc=0,bp=0;const lim=n*0.005;for(;bp<255;bp++){acc+=lh[bp];if(acc>=lim)break;}bp=Math.min(bp,110);const wp=232;
+  const lut=new Uint8ClampedArray(256);for(let v=0;v<256;v++){let t=(v-bp)/(wp-bp);t=t<0?0:t>1?1:t;lut[v]=Math.pow(t,1.25)*255;}
+  if(mode==='color'){for(let j=0;j<n*4;j+=4){let r=lut[d[j]],g=lut[d[j+1]],b=lut[d[j+2]];const l=(r*77+g*150+b*29)>>8;
+      d[j]=l+(r-l)*1.15;d[j+1]=l+(g-l)*1.15;d[j+2]=l+(b-l)*1.15;}}
+  else{const bw=mode==='bw';for(let i=0,j=0;i<n;i++,j+=4){let v=lut[lum[i]];if(bw)v=v<=120?0:v>=190?255:(v-120)*255/70;d[j]=d[j+1]=d[j+2]=v;}}
+  return d;}
+
+/* Output size in pixels for a page */
+function outSize(size,landscape,dpi){let[w,h]=PAPER[size];if(landscape)[w,h]=[h,w];return{W:Math.round(w/25.4*dpi),H:Math.round(h/25.4*dpi),wPt:w*PT_PER_MM,hPt:h*PT_PER_MM};}
+
+/* Corners in output order after rotation, and whether the sheet reads landscape */
+function rotQuad(q,rot){return [0,1,2,3].map(i=>q[(i+rot)%4]);}
+function isLandscape(qPx){const L=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);return L(qPx[0],qPx[1])+L(qPx[3],qPx[2])>L(qPx[0],qPx[3])+L(qPx[1],qPx[2]);}
+
+/* Minimal PDF writer: one JPEG per page, filling the page. pages: [{bytes,W,H,wPt,hPt}] */
+function buildPdf(pages){const enc=new TextEncoder(),chunks=[],offs=[];let pos=0;
+  const put=x=>{const b=typeof x==='string'?enc.encode(x):x;chunks.push(b);pos+=b.length;};
+  const obj=(num,body)=>{offs[num]=pos;put(num+' 0 obj\n');if(Array.isArray(body))body.forEach(put);else put(body);put('\nendobj\n');};
+  put('%PDF-1.4\n');put(new Uint8Array([0x25,0xE2,0xE3,0xCF,0xD3,0x0A]));
+  const N=pages.length,f=v=>v.toFixed(2);
+  obj(1,'<< /Type /Catalog /Pages 2 0 R >>');
+  obj(2,'<< /Type /Pages /Count '+N+' /Kids ['+pages.map((_,i)=>(3+i*3)+' 0 R').join(' ')+'] >>');
+  pages.forEach((p,i)=>{const pn=3+i*3,cn=pn+1,im=pn+2;
+    obj(pn,'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+f(p.wPt)+' '+f(p.hPt)+'] /Resources << /XObject << /Im0 '+im+' 0 R >> >> /Contents '+cn+' 0 R >>');
+    const cs='q '+f(p.wPt)+' 0 0 '+f(p.hPt)+' 0 0 cm /Im0 Do Q';
+    obj(cn,['<< /Length '+cs.length+' >>\nstream\n',cs,'\nendstream']);
+    obj(im,['<< /Type /XObject /Subtype /Image /Width '+p.W+' /Height '+p.H+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+p.bytes.length+' >>\nstream\n',p.bytes,'\nendstream']);});
+  const total=3+N*3,xref=pos;let x='xref\n0 '+total+'\n0000000000 65535 f \n';for(let i=1;i<total;i++)x+=String(offs[i]).padStart(10,'0')+' 00000 n \n';
+  put(x);put('trailer\n<< /Size '+total+' /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF\n');
+  return chunks;}
+</script>
+
+<script src="../../shared/app.js"></script>
+<script>
+/* ===== App ===== */
+const $=id=>document.getElementById(id);
+const pages=[];let nextId=1;let dpi=200;
+const defaults={size:'A4',mode:'color'};
+const MAX_SRC=5000,PV_MAX=1600;
+
+function setSeg(seg,val){seg.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===val)));}
+function onSeg(seg,fn){seg.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;setSeg(seg,b.dataset.v);fn(b.dataset.v);});}
+const tick=()=>new Promise(r=>setTimeout(r,30));
+function busy(t){if(t){$('busyText').textContent=t;$('busy').hidden=false;}else $('busy').hidden=true;}
+let toastTimer;
+function toast(msg,actLabel,act){$('toastText').textContent=msg;const b=$('toastAct');b.hidden=!actLabel;if(actLabel){b.textContent=actLabel;b.onclick=()=>{$('toast').hidden=true;act();};}
+  $('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{$('toast').hidden=true;},actLabel?6000:3500);}
+
+async function decode(blob){try{return await createImageBitmap(blob,{imageOrientation:'from-image'});}catch(e){
+  return await new Promise((res,rej)=>{const u=URL.createObjectURL(blob),im=new Image();im.onload=()=>{res(im);};im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('decode'));};im.src=u;});}}
+function dims(img){return[img.width||img.naturalWidth,img.height||img.naturalHeight];}
+function toCanvas(img,maxSide){const[w,h]=dims(img),s=Math.min(1,maxSide/Math.max(w,h)),c=document.createElement('canvas');
+  c.width=Math.max(2,Math.round(w*s));c.height=Math.max(2,Math.round(h*s));const x=c.getContext('2d',{willReadFrequently:true});x.imageSmoothingQuality='high';x.drawImage(img,0,0,c.width,c.height);return c;}
+const FULL=[[0,0],[1,0],[1,1],[0,1]];
+const INSET=[[.08,.08],[.92,.08],[.92,.92],[.08,.92]];
+
+function detectOn(pv){const s=Math.min(1,520/Math.max(pv.width,pv.height)),c=document.createElement('canvas');
+  c.width=Math.round(pv.width*s);c.height=Math.round(pv.height*s);const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(pv,0,0,c.width,c.height);
+  return detectQuadData(x.getImageData(0,0,c.width,c.height).data,c.width,c.height);}
+
+/* Render a page from a source canvas at a dpi; returns canvas */
+function renderFrom(src,srcData,p,dpiOut){const q=rotQuad(p.quad,p.rot).map(([x,y])=>[x*src.width,y*src.height]);
+  const land=p.orient==='auto'?isLandscape(q):p.orient==='landscape';const{W,H}=outSize(p.size,land,dpiOut);
+  const px=enhance(warp(srcData,src.width,src.height,q,W,H),W,H,p.mode);
+  const c=document.createElement('canvas');c.width=W;c.height=H;c.getContext('2d').putImageData(new ImageData(px,W,H),0,0);return{c,land};}
+function pvData(p){if(!p.pvData)p.pvData=p.pv.getContext('2d',{willReadFrequently:true}).getImageData(0,0,p.pv.width,p.pv.height).data;return p.pvData;}
+function quickRender(p,d){return renderFrom(p.pv,pvData(p),p,d);}
+
+async function addFiles(files,label){const list=[...files].filter(f=>f&&(f.type?f.type.startsWith('image/'):true));if(!list.length)return;
+  const added=[];
+  for(let i=0;i<list.length;i++){busy(list.length>1?`読み込み中 ${i+1}/${list.length}`:'書類を探しています…');await tick();
+    try{const img=await decode(list[i]);const pv=toCanvas(img,PV_MAX);if(img.close)img.close();
+      const q=detectOn(pv);const p={id:nextId++,file:list[i],pv,quad:q||INSET,found:!!q,rot:0,orient:'auto',size:defaults.size,mode:defaults.mode,label};
+      p.thumb=quickRender(p,40).c.toDataURL('image/jpeg',0.8);pages.push(p);added.push(p);}
+    catch(e){toast('この写真は読み込めませんでした。JPEGかPNGの写真を選んでください。');}}
+  busy(false);renderList();
+  if(added.length===1)openEditor(added[0],true);
+  else if(added.length>1){const miss=added.filter(p=>!p.found).length;toast(miss?`${added.length}ページ追加しました。${miss}ページは枠を確認してください`:`${added.length}ページ追加しました`);}}
+
+$('camIn').addEventListener('change',e=>{addFiles(e.target.files);e.target.value='';});
+$('picIn').addEventListener('change',e=>{addFiles(e.target.files);e.target.value='';});
+
+const ic={up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 14 6-6 6 6"/></svg>',down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 10 6 6 6-6"/></svg>'};
+const modeName={color:'カラー',gray:'グレー',bw:'白黒',raw:'補正なし'};
+function renderList(){const ol=$('pages');ol.innerHTML='';
+  pages.forEach((p,i)=>{const li=document.createElement('li');li.className='pg';
+    const q=rotQuad(p.quad,p.rot).map(([x,y])=>[x*p.pv.width,y*p.pv.height]);const land=p.orient==='auto'?isLandscape(q):p.orient==='landscape';
+    li.innerHTML=`<img alt="ページ${i+1}"><div class="meta"><div class="no">P.${String(i+1).padStart(2,'0')}${p.label?' · '+p.label:''}</div><div class="spec"></div><div class="row2"><button class="btn" type="button" data-a="edit">調整</button><button class="btn" type="button" data-a="del">削除</button></div></div><div class="act"><button class="icon-btn" type="button" data-a="up" aria-label="上へ" ${i?'':'disabled'}>${ic.up}</button><button class="icon-btn" type="button" data-a="down" aria-label="下へ" ${i<pages.length-1?'':'disabled'}>${ic.down}</button></div>`;
+    li.querySelector('img').src=p.thumb;li.querySelector('.spec').textContent=`${p.size} ${land?'横':'縦'} · ${modeName[p.mode]}`;
+    li.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const a=b.dataset.a,k=pages.indexOf(p);
+      if(a==='edit')openEditor(p,false);
+      else if(a==='del'){pages.splice(k,1);renderList();toast('ページを削除しました','元に戻す',()=>{pages.splice(Math.min(k,pages.length),0,p);renderList();});}
+      else if(a==='up'&&k>0){[pages[k-1],pages[k]]=[pages[k],pages[k-1]];renderList();}
+      else if(a==='down'&&k<pages.length-1){[pages[k+1],pages[k]]=[pages[k],pages[k+1]];renderList();}});
+    ol.appendChild(li);});
+  $('pgCount').textContent=pages.length+' ページ';$('empty').hidden=pages.length>0;
+  $('saveBtn').disabled=!pages.length;$('saveBtn').textContent=pages.length?`PDFを保存（${pages.length}ページ）`:'PDFを保存';}
+
+/* ===== Editor ===== */
+let ed=null,edOrig=null,edNew=false,tab='frame',drag=-1,layout=null;
+const cv=$('edCanvas'),cx=cv.getContext('2d'),lp=$('loupe'),lx=lp.getContext('2d');
+function accent(){return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#c4651a';}
+function openEditor(p,isNew){ed=p;edNew=isNew;edOrig={quad:p.quad.map(a=>a.slice()),rot:p.rot,orient:p.orient,size:p.size,mode:p.mode};
+  $('edTitle').textContent=`ページ ${pages.indexOf(p)+1} の調整`;setSeg($('sizeSeg'),p.size);setSeg($('orientSeg'),p.orient);setSeg($('modeSeg'),p.mode);
+  tab='frame';setSeg($('tabSeg'),'frame');$('editor').hidden=false;document.body.style.overflow='hidden';showTab();
+  if(isNew&&!p.found)toast('書類の枠が見つかりませんでした。四隅をドラッグして合わせてください');}
+function closeEditor(){$('editor').hidden=true;document.body.style.overflow='';ed=null;}
+function fit(){const st=$('stage'),r=st.getBoundingClientRect(),aw=r.width-24,ah=r.height-8;const s=Math.min(aw/ed.pv.width,ah/ed.pv.height);
+  const w=Math.max(10,Math.floor(ed.pv.width*s)),h=Math.max(10,Math.floor(ed.pv.height*s)),dpr=window.devicePixelRatio||1;
+  cv.style.width=w+'px';cv.style.height=h+'px';cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);layout={w,h,dpr};draw();}
+function draw(){if(!ed||!layout)return;const{w,h,dpr}=layout;cx.setTransform(dpr,0,0,dpr,0,0);cx.clearRect(0,0,w,h);cx.drawImage(ed.pv,0,0,w,h);
+  const P=ed.quad.map(([x,y])=>[x*w,y*h]);cx.fillStyle='rgba(0,0,0,.5)';cx.beginPath();cx.rect(0,0,w,h);cx.moveTo(P[0][0],P[0][1]);for(let i=3;i>=0;i--)cx.lineTo(P[i][0],P[i][1]);cx.closePath();cx.fill('evenodd');
+  const ac=accent();cx.strokeStyle=ac;cx.lineWidth=2;cx.beginPath();P.forEach((p,i)=>i?cx.lineTo(p[0],p[1]):cx.moveTo(p[0],p[1]));cx.closePath();cx.stroke();
+  const R=rotQuad(P,ed.rot);cx.lineWidth=5;cx.beginPath();cx.moveTo(R[0][0],R[0][1]);cx.lineTo(R[1][0],R[1][1]);cx.stroke();
+  const mx=(R[0][0]+R[1][0])/2,my=(R[0][1]+R[1][1])/2;cx.fillStyle=ac;cx.beginPath();cx.arc(mx,my,12,0,7);cx.fill();cx.fillStyle='#fff';cx.font='bold 13px sans-serif';cx.textAlign='center';cx.textBaseline='middle';cx.fillText('上',mx,my+1);
+  P.forEach((p,i)=>{cx.beginPath();cx.arc(p[0],p[1],drag===i?15:12,0,7);cx.fillStyle=drag===i?ac:'rgba(255,255,255,.25)';cx.fill();cx.lineWidth=2.5;cx.strokeStyle='#fff';cx.stroke();});}
+function drawLoupe(i){const{w,h}=layout,p=ed.quad[i],pxv=p[0]*ed.pv.width,pyv=p[1]*ed.pv.height,span=ed.pv.width/w*40;
+  lp.hidden=false;lp.style.left=p[0]<0.5?'auto':'10px';lp.style.right=p[0]<0.5?'10px':'auto';
+  lx.setTransform(1,0,0,1,0,0);lx.fillStyle='#000';lx.fillRect(0,0,240,240);lx.save();lx.beginPath();lx.arc(120,120,120,0,7);lx.clip();
+  const k=240/(span*2);lx.setTransform(k,0,0,k,120-pxv*k,120-pyv*k);lx.imageSmoothingEnabled=true;lx.drawImage(ed.pv,0,0);
+  const Q=ed.quad.map(([x,y])=>[x*ed.pv.width,y*ed.pv.height]);lx.strokeStyle=accent();lx.lineWidth=2/k;lx.beginPath();Q.forEach((q,j)=>j?lx.lineTo(q[0],q[1]):lx.moveTo(q[0],q[1]));lx.closePath();lx.stroke();lx.restore();
+  lx.setTransform(1,0,0,1,0,0);lx.strokeStyle='#fff';lx.lineWidth=2;lx.beginPath();lx.moveTo(120,96);lx.lineTo(120,144);lx.moveTo(96,120);lx.lineTo(144,120);lx.stroke();}
+function ptr(e){const r=cv.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top];}
+cv.addEventListener('pointerdown',e=>{if(!ed)return;const[x,y]=ptr(e);let bi=-1,bd=40;ed.quad.forEach(([qx,qy],i)=>{const d=Math.hypot(qx*layout.w-x,qy*layout.h-y);if(d<bd){bd=d;bi=i;}});
+  if(bi<0)return;drag=bi;cv.setPointerCapture(e.pointerId);e.preventDefault();draw();drawLoupe(bi);});
+cv.addEventListener('pointermove',e=>{if(drag<0)return;const[x,y]=ptr(e);ed.quad[drag]=[Math.min(1,Math.max(0,x/layout.w)),Math.min(1,Math.max(0,y/layout.h))];draw();drawLoupe(drag);});
+const endDrag=()=>{if(drag<0)return;drag=-1;lp.hidden=true;draw();};
+cv.addEventListener('pointerup',endDrag);cv.addEventListener('pointercancel',endDrag);
+window.addEventListener('resize',()=>{if(ed&&tab==='frame')fit();});
+let resTimer;
+async function showTab(){if(tab==='frame'){$('edResult').hidden=true;cv.hidden=false;requestAnimationFrame(fit);}
+  else{cv.hidden=true;lp.hidden=true;clearTimeout(resTimer);resTimer=setTimeout(()=>{if(!ed)return;$('edResult').src=quickRender(ed,110).c.toDataURL('image/jpeg',0.85);$('edResult').hidden=false;},20);}}
+function changed(){if(tab==='result')showTab();else draw();}
+onSeg($('tabSeg'),v=>{tab=v;showTab();});
+onSeg($('sizeSeg'),v=>{ed.size=v;defaults.size=v;changed();});
+onSeg($('orientSeg'),v=>{ed.orient=v;changed();});
+onSeg($('modeSeg'),v=>{ed.mode=v;defaults.mode=v;changed();});
+$('edDetect').onclick=()=>{const q=detectOn(ed.pv);if(q){ed.quad=q;ed.found=true;}else toast('自動で見つかりませんでした。四隅を手で合わせてください');changed();};
+$('edFull').onclick=()=>{ed.quad=FULL.map(a=>a.slice());changed();};
+$('edRot').onclick=()=>{ed.rot=(ed.rot+1)%4;changed();};
+$('edBack').onclick=()=>{if(edNew){const k=pages.indexOf(ed);if(k>=0)pages.splice(k,1);}else Object.assign(ed,{quad:edOrig.quad,rot:edOrig.rot,orient:edOrig.orient,size:edOrig.size,mode:edOrig.mode});closeEditor();renderList();};
+$('edOk').onclick=()=>{ed.thumb=quickRender(ed,40).c.toDataURL('image/jpeg',0.8);closeEditor();renderList();};
+
+/* ===== Save ===== */
+onSeg($('dpiSeg'),v=>{dpi=+v;});
+function stamp(){const d=new Date(),z=n=>String(n).padStart(2,'0');return`scan_${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}`;}
+$('fname').value=stamp();
+function toJpeg(c,q){return new Promise(r=>c.toBlob(b=>r(b),'image/jpeg',q));}
+async function savePdf(){if(!pages.length)return;const parts=[];
+  try{for(let i=0;i<pages.length;i++){const p=pages[i];busy(`PDFを作成中 ${i+1}/${pages.length}`);await tick();
+      const img=await decode(p.file);const src=toCanvas(img,MAX_SRC);if(img.close)img.close();
+      const sd=src.getContext('2d',{willReadFrequently:true}).getImageData(0,0,src.width,src.height).data;
+      const{c,land}=renderFrom(src,sd,p,dpi);src.width=src.height=1;
+      const blob=await toJpeg(c,p.mode==='color'||p.mode==='raw'?0.88:0.85);const{wPt,hPt}=outSize(p.size,land,dpi);
+      parts.push({bytes:new Uint8Array(await blob.arrayBuffer()),W:c.width,H:c.height,wPt,hPt});c.width=c.height=1;}
+    const pdf=new Blob(buildPdf(parts),{type:'application/pdf'});busy(false);
+    let name=($('fname').value||stamp()).replace(/[\\/:*?"<>|]/g,'_').trim()||stamp();await offer(pdf,name+'.pdf');}
+  catch(e){busy(false);toast('PDFを作れませんでした。ページ数を減らすか「標準」画質で試してください。');}}
+async function offer(blob,name){let dl=null;try{if(window.claude&&window.claude.use)dl=await window.claude.use('downloads');}catch(e){dl=null;}
+  if(dl){try{await dl.save({filename:name,data:blob});toast('PDFを保存しました');}
+    catch(e){const c=e&&e.code;toast(c==='declined'?'保存を取りやめました':c==='rate_limited'?'少し待ってからもう一度押してください':c==='too_large'?'ファイルが大きすぎます。「標準」画質で試してください':'この画面では保存できませんでした');}
+    return;}
+  const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),60000);toast('PDFの保存を開始しました');}
+$('saveBtn').onclick=savePdf;
+
+/* ===== Sample photo (a skewed inspection sheet on a desk, with uneven light) ===== */
+function makeSample(){const D=document.createElement('canvas');D.width=420;D.height=594;const g=D.getContext('2d');
+  g.fillStyle='#fbfaf6';g.fillRect(0,0,420,594);g.fillStyle='#1d2430';g.font='bold 22px sans-serif';g.fillText('絶縁抵抗測定 記録表',30,52);
+  g.font='13px sans-serif';g.fillText('件名：分電盤 L-1 定期点検',30,84);g.fillText('測定日：2026年11月7日　計器：DC500V',30,104);
+  g.strokeStyle='#33404f';g.lineWidth=1.2;const cols=[30,130,250,330,390],rows=[124,150,176,202,228,254,280,306];
+  rows.forEach(y=>{g.beginPath();g.moveTo(30,y);g.lineTo(390,y);g.stroke();});cols.forEach(x=>{g.beginPath();g.moveTo(x,124);g.lineTo(x,306);g.stroke();});
+  const data=[['回路','測定箇所','MΩ','判定'],['1','電灯 1F','>100','良'],['2','電灯 2F','85','良'],['3','コンセント','62','良'],['4','空調','40','良'],['5','動力 P-1','12','良'],['6','予備','—','—']];
+  g.font='12px sans-serif';data.forEach((r,i)=>r.forEach((t,j)=>g.fillText(t,cols[j]+8,rows[i]+18)));
+  g.fillStyle='#8a94a0';for(let i=0;i<9;i++){g.fillRect(30,336+i*22,i%3===2?220:340,6);}
+  g.strokeStyle='#b8432f';g.lineWidth=2;g.beginPath();g.arc(350,540,26,0,7);g.stroke();g.fillStyle='#b8432f';g.font='bold 14px sans-serif';g.fillText('検査',335,545);
+  const dd=g.getImageData(0,0,420,594).data;
+  const W=1200,H=900,P=document.createElement('canvas');P.width=W;P.height=H;const pg=P.getContext('2d');const out=pg.createImageData(W,H),o=out.data;
+  const quad=[[420,95],[905,150],[985,840],[300,800]];const[a,b,c,d,e,f,gg,k]=homog(quad,[[0,0],[420,0],[420,594],[0,594]]);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const dn=gg*x+k*y+1,u=(a*x+b*y+c)/dn,v=(d*x+e*y+f)/dn,i=(y*W+x)*4;
+    const shade=0.62+0.38*(x/W)*(0.6+0.4*(1-y/H));
+    if(u>=0&&v>=0&&u<419&&v<593){const s=((v|0)*420+(u|0))*4;o[i]=dd[s]*shade;o[i+1]=dd[s+1]*shade;o[i+2]=dd[s+2]*shade*0.97;}
+    else{const n=Math.sin(x*0.05+Math.sin(y*0.013)*6)*10;o[i]=(110+n)*shade;o[i+1]=(84+n)*shade;o[i+2]=(60+n)*shade;}
+    o[i+3]=255;}
+  pg.putImageData(out,0,0);return P;}
+let sampleCanvas=null;
+function demo(){sampleCanvas=makeSample();const b=$('demoBefore');b.getContext('2d').drawImage(sampleCanvas,0,0,300,225);
+  const s=sampleCanvas.getContext('2d').getImageData(0,0,1200,900).data;const pv=document.createElement('canvas');
+  const sm=document.createElement('canvas');sm.width=520;sm.height=390;sm.getContext('2d').drawImage(sampleCanvas,0,0,520,390);
+  const q=detectQuadData(sm.getContext('2d').getImageData(0,0,520,390).data,520,390)||INSET;
+  const r=renderFrom(sampleCanvas,s,{quad:q,rot:0,orient:'auto',size:'A4',mode:'color'},60);$('demoAfter').src=r.c.toDataURL('image/jpeg',0.85);}
+$('trySample').onclick=()=>{sampleCanvas.toBlob(b=>addFiles([new File([b],'sample.jpg',{type:'image/jpeg'})],'サンプル'),'image/jpeg',0.92);};
+demo();renderList();
+</script>
+</body>
+</html>

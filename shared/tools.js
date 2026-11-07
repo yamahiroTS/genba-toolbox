@@ -26,5 +26,13 @@ window.TOOLS = [
     path: "tools/messenger-wire/index.html",
     status: "ready",
     icon: '<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 27V6"/><path d="M27 27V6"/><path d="M5 9c7 7 15 7 22 0"/><path d="M11 14v4M16 15.5v4M21 14v4"/></svg>'
+  },
+  {
+    id: "scanner",
+    name: "書類スキャナー",
+    desc: "斜めから撮った書類を自動で切り抜き・台形補正し、A4／A3のPDFにする（端末内で処理）",
+    path: "tools/scanner/index.html",
+    status: "ready",
+    icon: '<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10V4h6"/><path d="M22 4h6v6"/><path d="M28 22v6h-6"/><path d="M10 28H4v-6"/><path d="M11 8h10v16H11z"/><path d="M14 13h4M14 17h4"/></svg>'
   }
 ];
