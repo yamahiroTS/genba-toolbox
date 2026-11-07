@@ -1,7 +1,7 @@
 /* オフライン対応（Service Worker）
    ファイルを修正・追加したら CACHE_NAME の版数を上げてください。
    スマホ側は次回起動時に新しいファイルを取り込みます。 */
-const CACHE_NAME = "genba-toolbox-v0.4.4";
+const CACHE_NAME = "genba-toolbox-v0.6.0";
 
 const APP_FILES = [
   "./",
@@ -18,7 +18,9 @@ const APP_FILES = [
   "./data/voltage-drop-data.js",
   "./tools/messenger-wire/index.html",
   "./tools/messenger-wire/calc.js",
-  "./data/messenger-data.js"
+  "./data/messenger-data.js",
+  "./tools/hotel/index.html",
+  "./tools/scanner/index.html"
 ];
 
 self.addEventListener("install", (event) => {
